@@ -1,0 +1,11 @@
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Build outputs / caches that may appear at the project root
+.expo/
+dist/
+node_modules/
+*.log
