@@ -41,6 +41,10 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
+            name="intro/[chapter]"
+            options={{ animation: 'fade', presentation: 'fullScreenModal' }}
+          />
+          <Stack.Screen
             name="preview/[stageId]"
             options={{ animation: 'fade_from_bottom' }}
           />

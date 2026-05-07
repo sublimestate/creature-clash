@@ -19,6 +19,7 @@ interface PlayerState {
   ownedCreatures: OwnedCreature[];
   team: TeamSlotState[];
   completedStages: Record<string, { stars: number }>;
+  seenChapterIntros: Record<number, boolean>;
   setName: (name: string) => void;
   addGold: (n: number) => void;
   addGems: (n: number) => void;
@@ -29,6 +30,7 @@ interface PlayerState {
   swapSlots: (a: number, b: number) => void;
   awardXp: (instanceIds: string[], amountPerCreature: number) => OwnedCreature[];
   recordStage: (stageId: string, stars: number) => void;
+  markChapterIntroSeen: (chapter: number) => void;
   resetAll: () => void;
 }
 
@@ -75,6 +77,7 @@ export const usePlayerStore = create<PlayerState>()(
       ownedCreatures: [],
       team: DEFAULT_TEAM,
       completedStages: {},
+      seenChapterIntros: {},
 
       setName: (name) => set({ displayName: name }),
       addGold: (n) => set((s) => ({ gold: s.gold + n })),
@@ -162,6 +165,15 @@ export const usePlayerStore = create<PlayerState>()(
         });
       },
 
+      markChapterIntroSeen: (chapter) => {
+        set((s) => {
+          if (s.seenChapterIntros[chapter]) return {};
+          return {
+            seenChapterIntros: { ...s.seenChapterIntros, [chapter]: true },
+          };
+        });
+      },
+
       resetAll: () => {
         const { owned, team } = buildStarterInventory();
         set({
@@ -170,6 +182,7 @@ export const usePlayerStore = create<PlayerState>()(
           ownedCreatures: owned,
           team,
           completedStages: {},
+          seenChapterIntros: {},
         });
       },
     }),
@@ -187,6 +200,7 @@ export const usePlayerStore = create<PlayerState>()(
         ownedCreatures: [],
         team: DEFAULT_TEAM,
         completedStages: {},
+        seenChapterIntros: {},
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

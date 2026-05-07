@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
 import { CurrencyHeader } from '../../src/components/common/CurrencyHeader';
@@ -13,7 +13,22 @@ export default function HomeScreen() {
   const owned = usePlayerStore((s) => s.ownedCreatures);
   const completedStages = usePlayerStore((s) => s.completedStages);
   const team = usePlayerStore((s) => s.team);
+  const resetAll = usePlayerStore((s) => s.resetAll);
   const teamFilled = team.filter((t) => t.instanceId).length;
+  const [resetArmed, setResetArmed] = useState(false);
+
+  // Two-step confirmation: first tap arms, second tap resets. Auto-disarms
+  // after 3s so the player can't trip it accidentally on a later visit.
+  const handleResetTap = () => {
+    if (!resetArmed) {
+      setResetArmed(true);
+      setTimeout(() => setResetArmed(false), 3000);
+      return;
+    }
+    resetAll();
+    setResetArmed(false);
+    router.replace('/');
+  };
 
   const completedCount = Object.keys(completedStages).length;
   const nextStage = STAGES.find((s) => !completedStages[s.id]) ?? STAGES[STAGES.length - 1];
@@ -80,6 +95,36 @@ export default function HomeScreen() {
           <Text style={styles.tip}>• Cunning outwits Predator. Social outnumbers Predator.</Text>
           <Text style={styles.tip}>• Swift dodges Tough. Wild breaks Swift formations.</Text>
         </View>
+
+        <Pressable
+          onPress={handleResetTap}
+          style={({ pressed }) => [
+            styles.resetButton,
+            resetArmed && styles.resetButtonArmed,
+            { opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Text
+            style={[
+              styles.resetLabel,
+              resetArmed && styles.resetLabelArmed,
+            ]}
+          >
+            {resetArmed
+              ? 'Tap again to wipe save'
+              : 'Start New Game'}
+          </Text>
+          <Text
+            style={[
+              styles.resetSub,
+              resetArmed && { color: COLORS.bg },
+            ]}
+          >
+            {resetArmed
+              ? 'All pets, gold, gems, and progress will be reset'
+              : 'Wipes all progress and grants a fresh starter pack'}
+          </Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -171,4 +216,21 @@ const styles = StyleSheet.create({
   },
   tipTitle: { color: COLORS.accent, fontWeight: '800', marginBottom: 4 },
   tip: { color: COLORS.textDim, fontSize: 12 },
+  resetButton: {
+    marginTop: 8,
+    backgroundColor: 'transparent',
+    borderColor: COLORS.border,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+    gap: 4,
+  },
+  resetButtonArmed: {
+    backgroundColor: COLORS.danger,
+    borderColor: COLORS.danger,
+  },
+  resetLabel: { color: COLORS.textDim, fontSize: 13, fontWeight: '700' },
+  resetLabelArmed: { color: COLORS.text, fontSize: 14, fontWeight: '900' },
+  resetSub: { color: COLORS.textDim, fontSize: 11, textAlign: 'center' },
 });

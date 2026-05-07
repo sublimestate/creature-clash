@@ -3,6 +3,7 @@ import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CurrencyHeader } from '../../src/components/common/CurrencyHeader';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
+import { CHAPTERS } from '../../src/data/chapters';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
 import { STAGES } from '../../src/data/stages';
 import { usePlayerStore } from '../../src/stores/playerStore';
@@ -10,8 +11,24 @@ import { COLORS } from '../../src/theme';
 
 export default function BattleTab() {
   const completed = usePlayerStore((s) => s.completedStages);
+  const seenIntros = usePlayerStore((s) => s.seenChapterIntros);
   const team = usePlayerStore((s) => s.team);
   const teamFilled = team.filter((t) => t.instanceId).length;
+
+  // First stage of a chapter, with an unread intro? Route through the story
+  // screen first; the intro then forwards to /preview.
+  const handleStageTap = (stageId: string) => {
+    const stage = STAGES.find((s) => s.id === stageId);
+    if (!stage) return;
+    if (stage.index === 1 && !seenIntros[stage.chapter]) {
+      router.push({
+        pathname: '/intro/[chapter]',
+        params: { chapter: String(stage.chapter) },
+      });
+      return;
+    }
+    router.push(`/preview/${stageId}`);
+  };
 
   // Group stages by chapter
   const chapters: Record<number, typeof STAGES> = {};
@@ -41,9 +58,13 @@ export default function BattleTab() {
             </Text>
           </View>
         )}
-        {Object.entries(chapters).map(([ch, stages]) => (
+        {Object.entries(chapters).map(([ch, stages]) => {
+          const chMeta = CHAPTERS[Number(ch)];
+          return (
           <View key={ch} style={styles.chapter}>
-            <Text style={styles.chapterTitle}>Chapter {ch}</Text>
+            <Text style={styles.chapterTitle}>
+              Chapter {ch}{chMeta ? ` — ${chMeta.title}` : ''}
+            </Text>
             {stages.map((stage) => {
               const idx = STAGES.findIndex((s) => s.id === stage.id);
               const unlocked = isUnlocked(idx);
@@ -52,7 +73,7 @@ export default function BattleTab() {
                 <Pressable
                   key={stage.id}
                   disabled={!unlocked || teamFilled === 0}
-                  onPress={() => router.push(`/preview/${stage.id}`)}
+                  onPress={() => handleStageTap(stage.id)}
                   style={({ pressed }) => [
                     styles.stage,
                     !unlocked && styles.stageLocked,
@@ -102,7 +123,8 @@ export default function BattleTab() {
               );
             })}
           </View>
-        ))}
+          );
+        })}
       </ScrollView>
     </View>
   );
