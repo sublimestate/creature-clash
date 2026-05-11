@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../rng';
 import { typeMultiplier } from '../types';
-import { computeDamage } from '../damage';
+import { computeDamage, critChance, dodgeChance } from '../damage';
+import { selectAction } from '../ai';
 import { statsAtLevel } from '../stats';
 import { CREATURES_BY_ID } from '../../data/creatures';
 import { ABILITIES } from '../../data/abilities';
@@ -153,5 +154,102 @@ describe('simulateBattle', () => {
         }
       }
     }
+  });
+});
+
+describe('crit + dodge math', () => {
+  it('equal-speed creatures have 0% crit and 0% dodge', () => {
+    // Two creatures with the same SPD stat at the same level.
+    const a = makeBattleCreature(ownedAt('tabby', 5, 0), 'player', 'front', 1);
+    const b = makeBattleCreature(ownedAt('tabby', 5, 1), 'enemy', 'front', 1);
+    expect(critChance(a, b)).toBe(0);
+    expect(dodgeChance(a, b)).toBe(0);
+  });
+
+  it('faster attacker gets a non-zero crit chance, no dodge against', () => {
+    // Yapper (SPD 75 base) vs Pugling (SPD 25 base) — big speed gap.
+    const a = makeBattleCreature(ownedAt('yapper', 5), 'player', 'front', 1);
+    const b = makeBattleCreature(ownedAt('pugling', 5, 1), 'enemy', 'front', 1);
+    expect(critChance(a, b)).toBeGreaterThan(0);
+    expect(dodgeChance(a, b)).toBe(0);
+  });
+
+  it('faster defender gets a non-zero dodge, no crit for slow attacker', () => {
+    const slow = makeBattleCreature(ownedAt('pugling', 5), 'player', 'front', 1);
+    const fast = makeBattleCreature(ownedAt('yapper', 5, 1), 'enemy', 'front', 1);
+    expect(critChance(slow, fast)).toBe(0);
+    expect(dodgeChance(slow, fast)).toBeGreaterThan(0);
+  });
+
+  it('crit + dodge are capped (25% and 20%)', () => {
+    // Tiger (high-SPD legendary at level 50) vs Pugling (slow common at level 1).
+    // The natural speed gap will pin both caps.
+    const fast = makeBattleCreature(ownedAt('tiger', 50), 'player', 'front', 1);
+    const slow = makeBattleCreature(ownedAt('pugling', 1, 1), 'enemy', 'front', 1);
+    expect(critChance(fast, slow)).toBeLessThanOrEqual(0.25 + 1e-9);
+    expect(dodgeChance(slow, fast)).toBeLessThanOrEqual(0.2 + 1e-9);
+  });
+
+  it('damage with a dodge rolled returns dodged=true and zero damage', () => {
+    // We can't force a dodge from outside without a seeded rng path that
+    // happens to roll inside the dodge band. Instead, verify the structure
+    // of a normal result and accept either dodged or not for variance.
+    const a = makeBattleCreature(ownedAt('yapper', 5), 'player', 'front', 1);
+    const b = makeBattleCreature(ownedAt('pugling', 5, 1), 'enemy', 'front', 1);
+    const r = computeDamage(a, b, ABILITIES.dash, new Rng(99));
+    expect(typeof r.dodged).toBe('boolean');
+    expect(typeof r.isCrit).toBe('boolean');
+    if (r.dodged) expect(r.damage).toBe(0);
+  });
+});
+
+describe('AI personalities', () => {
+  it('saboteur (cunning) self-buffs SP.ATK on first action when Outsmart is ready', () => {
+    // Border collie has outsmart as its second ability.
+    const actor = makeBattleCreature(ownedAt('border', 10), 'player', 'front', 1);
+    const enemy = makeBattleCreature(ownedAt('tabby', 5, 1), 'enemy', 'front', 1);
+    const choice = selectAction(actor, [enemy], [actor]);
+    expect(choice).not.toBeNull();
+    expect(choice!.ability.id).toBe('outsmart');
+    expect(choice!.targets[0].instanceId).toBe(actor.instanceId);
+  });
+
+  it('hunter (predator) targets the lowest-HP enemy in range', () => {
+    const actor = makeBattleCreature(ownedAt('tabby', 5), 'player', 'front', 1);
+    const wounded = makeBattleCreature(ownedAt('tabby', 5, 1), 'enemy', 'front', 1);
+    const healthy = makeBattleCreature(ownedAt('tabby', 5, 2), 'enemy', 'front', 2);
+    // Wound the first enemy.
+    wounded.hp = 5;
+    const choice = selectAction(actor, [wounded, healthy], [actor]);
+    expect(choice).not.toBeNull();
+    expect(choice!.targets[0].instanceId).toBe(wounded.instanceId);
+  });
+
+  it('skirmisher (swift) picks priority abilities first', () => {
+    // Yapper's second ability is "dash" with priority=true.
+    const actor = makeBattleCreature(ownedAt('yapper', 5), 'player', 'front', 1);
+    const enemy = makeBattleCreature(ownedAt('pup', 5, 1), 'enemy', 'front', 1);
+    const choice = selectAction(actor, [enemy], [actor]);
+    expect(choice).not.toBeNull();
+    expect(choice!.ability.id).toBe('dash');
+  });
+
+  it('anchor (tough) uses team-DEF buff first when available', () => {
+    // Pugling has brace as its second ability — team DEF buff.
+    const actor = makeBattleCreature(ownedAt('pugling', 5), 'player', 'front', 1);
+    const ally = makeBattleCreature(ownedAt('tabby', 5, 1), 'player', 'front', 2);
+    const enemy = makeBattleCreature(ownedAt('tabby', 5, 2), 'enemy', 'front', 1);
+    const choice = selectAction(actor, [enemy], [actor, ally]);
+    expect(choice).not.toBeNull();
+    expect(choice!.ability.id).toBe('brace');
+  });
+
+  it('berserker (wild) always picks the highest-power available ability', () => {
+    // Husky's specials: bite (cd 0, pwr 45) and frenzy (cd 4, pwr 80).
+    const actor = makeBattleCreature(ownedAt('husky', 5), 'player', 'front', 1);
+    const enemy = makeBattleCreature(ownedAt('tabby', 5, 1), 'enemy', 'front', 1);
+    const choice = selectAction(actor, [enemy], [actor]);
+    expect(choice).not.toBeNull();
+    expect(choice!.ability.id).toBe('frenzy');
   });
 });

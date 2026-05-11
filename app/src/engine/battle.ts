@@ -294,13 +294,32 @@ function executeAbility(
   const aoeMultiplier = ability.aoe && damagedTargets.length > 1 ? 0.7 : 1;
 
   for (const target of damagedTargets) {
-    const { damage, effectiveness } = computeDamage(actor, target, ability, rng);
-    const finalDmg = Math.max(1, Math.round(damage * aoeMultiplier));
+    const result = computeDamage(actor, target, ability, rng);
+
+    // Dodged attacks deal no damage and skip status/debuff application.
+    if (result.dodged) {
+      push({
+        kind: 'attack',
+        attacker: actor.instanceId,
+        target: target.instanceId,
+        abilityId: ability.id,
+        abilityType: ability.type,
+        damage: 0,
+        effectiveness: 'normal',
+        dodged: true,
+        message: `${target.name} dodges ${actor.name}'s ${ability.name}!`,
+      });
+      continue;
+    }
+
+    const finalDmg = Math.max(1, Math.round(result.damage * aoeMultiplier));
     const fainted = applyDamage(target, finalDmg);
 
-    let msg = `${actor.name} uses ${ability.name} on ${target.name} for ${finalDmg} damage`;
-    if (effectiveness === 'super') msg += ' — super effective!';
-    else if (effectiveness === 'weak') msg += ' — not very effective.';
+    let msg = `${actor.name} `;
+    msg += result.isCrit ? `lands a critical ${ability.name}` : `uses ${ability.name}`;
+    msg += ` on ${target.name} for ${finalDmg} damage`;
+    if (result.effectiveness === 'super') msg += ' — super effective!';
+    else if (result.effectiveness === 'weak') msg += ' — not very effective.';
     else msg += '.';
 
     push({
@@ -310,7 +329,8 @@ function executeAbility(
       abilityId: ability.id,
       abilityType: ability.type,
       damage: finalDmg,
-      effectiveness,
+      effectiveness: result.effectiveness,
+      isCrit: result.isCrit,
       message: msg,
     });
 

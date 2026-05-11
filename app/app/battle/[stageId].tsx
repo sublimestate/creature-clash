@@ -141,15 +141,21 @@ export default function BattleScreen() {
             event.targets?.includes(u.instanceId);
           if (isTarget) {
             if (event.kind === 'attack') {
-              next.hitTick = tick;
-              next.popup = {
-                value: event.damage ?? 0,
-                kind: 'damage',
-                eff: event.effectiveness,
-                tick,
-              };
-              if (event.abilityType) {
-                next.flash = { type: event.abilityType, tick };
+              if (event.dodged) {
+                next.popup = { value: 0, kind: 'miss', tick };
+                // No hit shake or flash on a dodge.
+              } else {
+                next.hitTick = tick;
+                next.popup = {
+                  value: event.damage ?? 0,
+                  kind: 'damage',
+                  eff: event.effectiveness,
+                  isCrit: event.isCrit,
+                  tick,
+                };
+                if (event.abilityType) {
+                  next.flash = { type: event.abilityType, tick };
+                }
               }
             } else if (event.kind === 'heal') {
               next.popup = {

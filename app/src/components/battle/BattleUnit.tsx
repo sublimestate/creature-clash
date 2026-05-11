@@ -33,7 +33,13 @@ export interface UnitDisplayState {
   // Animation triggers
   attackTick?: number; // increment to trigger attack lunge
   hitTick?: number; // increment to trigger hit shake
-  popup?: { value: number; kind: 'damage' | 'heal'; eff?: Effectiveness; tick: number };
+  popup?: {
+    value: number;
+    kind: 'damage' | 'heal' | 'miss';
+    eff?: Effectiveness;
+    isCrit?: boolean;
+    tick: number;
+  };
   flash?: { type: CreatureType; tick: number };
   active?: boolean;
 }
@@ -139,6 +145,7 @@ export function BattleUnit({ unit }: Props) {
               value={unit.popup.value}
               kind={unit.popup.kind}
               effectiveness={unit.popup.eff}
+              isCrit={unit.popup.isCrit}
               visible
             />
           </View>

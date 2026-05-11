@@ -111,6 +111,9 @@ export interface BattleEvent {
   message: string;
   // Type of ability for visual effects (only on attack/heal events)
   abilityType?: CreatureType;
+  // Combat outcome flags — only meaningful on attack events.
+  isCrit?: boolean;
+  dodged?: boolean;
   // Snapshot of creature HP after event for UI sync
   hpAfter?: Record<string, number>;
   // Active status kinds per instanceId (only populated when changed in-event or
