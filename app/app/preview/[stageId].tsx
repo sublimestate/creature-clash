@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
+import { getBoss } from '../../src/data/bosses';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
 import { STAGES_BY_ID } from '../../src/data/stages';
 import { statsAtLevel } from '../../src/engine/stats';
@@ -126,6 +127,31 @@ export default function PreviewScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {(() => {
+          const boss = getBoss(stage.id);
+          if (!boss) return null;
+          const portraitId = stage.enemies[boss.portraitSlot ?? 0];
+          const portraitDef = portraitId ? CREATURES_BY_ID[portraitId] : null;
+          return (
+            <View style={styles.bossBlock}>
+              {portraitDef && (
+                <CreatureSprite
+                  creatureId={portraitDef.id}
+                  type={portraitDef.type}
+                  size={60}
+                  flip
+                />
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bossName}>
+                  {boss.name.toUpperCase()} — BOSS
+                </Text>
+                <Text style={styles.bossTaunt}>{boss.taunt}</Text>
+              </View>
+            </View>
+          );
+        })()}
+
         <Text style={styles.sectionLabel}>ENEMY</Text>
         <TeamPanel units={enemyUnits} opposing={playerUnits} flip />
 
@@ -294,6 +320,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   scroll: { padding: 12, paddingBottom: 40, gap: 10 },
+  bossBlock: {
+    flexDirection: 'row',
+    gap: 12,
+    backgroundColor: COLORS.panel,
+    borderColor: COLORS.danger,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  bossName: {
+    color: COLORS.danger,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  bossTaunt: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
   sectionLabel: {
     color: COLORS.accent,
     fontWeight: '900',

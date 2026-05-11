@@ -4,9 +4,11 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { CreatureCard } from '../../src/components/creatures/CreatureCard';
+import { FieldJournal } from '../../src/components/creatures/FieldJournal';
 import { CurrencyHeader } from '../../src/components/common/CurrencyHeader';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
@@ -95,6 +97,8 @@ export default function CreaturesScreen() {
             ))}
           </View>
         </View>
+
+        <FieldJournal />
       </ScrollView>
     </View>
   );
@@ -174,7 +178,7 @@ function Slot({
         <>
           <CreatureSprite creatureId={def.id} type={def.type} size={48} />
           <Text style={styles.slotName} numberOfLines={1}>
-            {def.name}
+            {owned!.nickname?.trim() || def.name}
           </Text>
           <Text style={styles.slotLvl}>Lv {owned!.level}</Text>
         </>
@@ -190,23 +194,37 @@ function Slot({
 
 function DetailPanel({ instanceId }: { instanceId: string }) {
   const owned = usePlayerStore((s) => s.ownedCreatures.find((c) => c.instanceId === instanceId));
+  const setNickname = usePlayerStore((s) => s.setNickname);
   if (!owned) return null;
   const def = CREATURES_BY_ID[owned.creatureId];
   if (!def) return null;
   const stats = statsAtLevel(def, owned.level);
   const rarityColor = RARITY_COLORS[def.rarity];
+  const headerName = owned.nickname?.trim() || def.name;
   return (
     <View style={[styles.section, { borderColor: rarityColor, borderWidth: 1 }]}>
-      <Text style={styles.sectionTitle}>{def.name.toUpperCase()}</Text>
+      <Text style={styles.sectionTitle}>{headerName.toUpperCase()}</Text>
       <View style={styles.detailRow}>
         <CreatureSprite creatureId={def.id} type={def.type} size={80} />
         <View style={{ flex: 1, gap: 4 }}>
           <Text style={[styles.detailType, { color: rarityColor }]}>
-            {def.rarity.toUpperCase()} · {def.type.toUpperCase()}
+            {def.rarity.toUpperCase()} · {def.type.toUpperCase()} · {def.name.toUpperCase()}
           </Text>
           <Text style={styles.detailLvl}>Level {owned.level}</Text>
           <Text style={styles.detailFlavor}>{def.flavor}</Text>
         </View>
+      </View>
+
+      <View style={styles.nicknameField}>
+        <Text style={styles.nicknameLabel}>NICKNAME</Text>
+        <TextInput
+          value={owned.nickname ?? ''}
+          onChangeText={(t) => setNickname(owned.instanceId, t)}
+          placeholder={`Call them what you like — or leave blank for "${def.name}"`}
+          placeholderTextColor={COLORS.textDim}
+          maxLength={16}
+          style={styles.nicknameInput}
+        />
       </View>
       <View style={styles.statsGrid}>
         <StatBlock label="HP" value={stats.hp} />
@@ -348,4 +366,21 @@ const styles = StyleSheet.create({
   abilityMeta: { alignItems: 'flex-end' },
   abilityPower: { color: COLORS.accent, fontWeight: '900', fontSize: 14 },
   abilityCd: { color: COLORS.textDim, fontSize: 10 },
+  nicknameField: { marginTop: 8, gap: 4 },
+  nicknameLabel: {
+    color: COLORS.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  nicknameInput: {
+    backgroundColor: COLORS.bgElev,
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '700',
+    padding: 8,
+    borderRadius: 6,
+    borderColor: COLORS.border,
+    borderWidth: 1,
+  },
 });

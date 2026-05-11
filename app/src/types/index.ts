@@ -57,6 +57,7 @@ export interface OwnedCreature {
   level: number;
   xp: number;
   acquiredAt: number;
+  nickname?: string;
 }
 
 export interface BattleCreature {

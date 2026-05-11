@@ -1,6 +1,8 @@
 import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
+import { View } from 'react-native';
+import { usePlayerStore } from '../../src/stores/playerStore';
 import { COLORS } from '../../src/theme';
 
 function TabIcon(props: {
@@ -11,6 +13,17 @@ function TabIcon(props: {
 }
 
 export default function TabLayout() {
+  const hydrated = usePlayerStore((s) => s.hydrated);
+  const hasSelectedStarter = usePlayerStore((s) => s.hasSelectedStarter);
+
+  // Hold a blank screen until persist finishes — otherwise we briefly redirect
+  // a returning player to onboarding before the saved state arrives.
+  if (!hydrated) return <View style={{ flex: 1, backgroundColor: COLORS.bg }} />;
+
+  if (!hasSelectedStarter) {
+    return <Redirect href="/onboarding/select-starter" />;
+  }
+
   return (
     <Tabs
       screenOptions={{

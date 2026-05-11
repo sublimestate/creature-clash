@@ -11,6 +11,7 @@ import {
   BattleUnit,
   UnitDisplayState,
 } from '../../src/components/battle/BattleUnit';
+import { getBoss } from '../../src/data/bosses';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
 import { STAGES_BY_ID } from '../../src/data/stages';
 import { simulateBattle, buildEnemyTeam, makeBattleCreature, TeamSlot } from '../../src/engine/battle';
@@ -31,6 +32,7 @@ export default function BattleScreen() {
   const addGold = usePlayerStore((s) => s.addGold);
   const awardXp = usePlayerStore((s) => s.awardXp);
   const recordStage = usePlayerStore((s) => s.recordStage);
+  const markCreaturesMet = usePlayerStore((s) => s.markCreaturesMet);
 
   // Snapshot the team & build TeamSlots once when entering the screen.
   const battleData = useMemo(() => {
@@ -181,8 +183,10 @@ export default function BattleScreen() {
       const survivors = battleData.result.playerSurvivors;
       const stars = survivors >= 4 ? 3 : survivors >= 2 ? 2 : 1;
       recordStage(stage.id, stars);
+      // Mark every enemy species as encountered for the field journal.
+      markCreaturesMet(stage.enemies, stage.id);
     }
-  }, [done, battleData, stage, rewarded, addGold, awardXp, recordStage]);
+  }, [done, battleData, stage, rewarded, addGold, awardXp, recordStage, markCreaturesMet]);
 
   if (!stage) {
     return (
@@ -257,6 +261,11 @@ export default function BattleScreen() {
           {winner === 'player' && (
             <Text style={styles.endSub}>
               +{stage.goldReward} gold, +{stage.xpReward} XP
+            </Text>
+          )}
+          {winner === 'player' && getBoss(stage.id)?.victoryLine && (
+            <Text style={styles.bossLine}>
+              {getBoss(stage.id)!.victoryLine}
             </Text>
           )}
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
@@ -380,6 +389,16 @@ const styles = StyleSheet.create({
   lose: {},
   endTitle: { color: COLORS.accent, fontSize: 36, fontWeight: '900', letterSpacing: 4 },
   endSub: { color: COLORS.text, fontSize: 14, fontWeight: '700' },
+  bossLine: {
+    color: COLORS.text,
+    fontSize: 13,
+    lineHeight: 18,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    paddingHorizontal: 24,
+    marginTop: 12,
+    maxWidth: 400,
+  },
   button: {
     backgroundColor: COLORS.accent,
     paddingHorizontal: 24,

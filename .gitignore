@@ -4,6 +4,9 @@
 .idea/
 *.swp
 
+# Claude Code local state
+.claude/
+
 # Build outputs / caches that may appear at the project root
 .expo/
 dist/

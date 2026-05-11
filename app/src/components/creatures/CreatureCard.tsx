@@ -40,8 +40,11 @@ export function CreatureCard({ owned, onPress, selected, inTeam, small }: Props)
       />
       <View style={styles.info}>
         <Text numberOfLines={1} style={styles.name}>
-          {def.name}
+          {owned.nickname?.trim() || def.name}
         </Text>
+        {owned.nickname?.trim() && (
+          <Text style={styles.species}>{def.name}</Text>
+        )}
         <Text style={styles.lvl}>Lv {owned.level}</Text>
         <RarityBadge rarity={def.rarity} />
       </View>
@@ -72,6 +75,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   name: { color: COLORS.text, fontWeight: '800', fontSize: 14 },
+  species: { color: COLORS.textDim, fontSize: 10, fontStyle: 'italic' },
   lvl: { color: COLORS.textDim, fontSize: 12 },
   teamPin: {
     position: 'absolute',

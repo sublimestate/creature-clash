@@ -40,7 +40,9 @@ export function makeBattleCreature(
   return {
     instanceId: owned.instanceId,
     creatureId: owned.creatureId,
-    name: def.name,
+    // Battle log + on-screen labels honor the nickname. Falls back to the
+    // species name for enemies (which never have nicknames).
+    name: owned.nickname?.trim() || def.name,
     type: def.type,
     level: owned.level,
     side,

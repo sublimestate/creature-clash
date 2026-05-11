@@ -20,6 +20,8 @@ interface PlayerState {
   team: TeamSlotState[];
   completedStages: Record<string, { stars: number }>;
   seenChapterIntros: Record<number, boolean>;
+  hasSelectedStarter: boolean;
+  metCreatures: Record<string, { firstSeenStageId: string }>;
   setName: (name: string) => void;
   addGold: (n: number) => void;
   addGems: (n: number) => void;
@@ -31,6 +33,9 @@ interface PlayerState {
   awardXp: (instanceIds: string[], amountPerCreature: number) => OwnedCreature[];
   recordStage: (stageId: string, stars: number) => void;
   markChapterIntroSeen: (chapter: number) => void;
+  selectStarters: (picks: Array<{ creatureId: string; nickname?: string }>) => void;
+  setNickname: (instanceId: string, nickname: string) => void;
+  markCreaturesMet: (creatureIds: string[], stageId: string) => void;
   resetAll: () => void;
 }
 
@@ -47,25 +52,7 @@ function newInstanceId(): string {
   return `c${Date.now().toString(36)}${(instanceCounter++).toString(36)}`;
 }
 
-// Starter pack — one of each role so the new player can experiment with the
-// matchup chart from day one.
-const STARTER_IDS = ['tabby', 'pup', 'yapper', 'pugling', 'sphynx', 'mutt'];
-
-function buildStarterInventory(): { owned: OwnedCreature[]; team: TeamSlotState[] } {
-  const owned: OwnedCreature[] = STARTER_IDS.map((cid) => ({
-    instanceId: newInstanceId(),
-    creatureId: cid,
-    level: 3,
-    xp: 0,
-    acquiredAt: Date.now(),
-  }));
-  // First 3 -> front, next 2 -> back
-  const team: TeamSlotState[] = DEFAULT_TEAM.map((s, i) => ({
-    ...s,
-    instanceId: owned[i]?.instanceId ?? null,
-  }));
-  return { owned, team };
-}
+const STARTER_LEVEL = 3;
 
 export const usePlayerStore = create<PlayerState>()(
   persist(
@@ -78,6 +65,8 @@ export const usePlayerStore = create<PlayerState>()(
       team: DEFAULT_TEAM,
       completedStages: {},
       seenChapterIntros: {},
+      hasSelectedStarter: false,
+      metCreatures: {},
 
       setName: (name) => set({ displayName: name }),
       addGold: (n) => set((s) => ({ gold: s.gold + n })),
@@ -174,15 +163,62 @@ export const usePlayerStore = create<PlayerState>()(
         });
       },
 
-      resetAll: () => {
-        const { owned, team } = buildStarterInventory();
+      selectStarters: (picks) => {
+        const owned: OwnedCreature[] = picks.map((p) => ({
+          instanceId: newInstanceId(),
+          creatureId: p.creatureId,
+          level: STARTER_LEVEL,
+          xp: 0,
+          acquiredAt: Date.now(),
+          nickname: p.nickname?.trim() || undefined,
+        }));
+        const team: TeamSlotState[] = DEFAULT_TEAM.map((s, i) => ({
+          ...s,
+          instanceId: owned[i]?.instanceId ?? null,
+        }));
         set({
-          gold: 200,
-          gems: 500,
           ownedCreatures: owned,
           team,
+          hasSelectedStarter: true,
+        });
+      },
+
+      setNickname: (instanceId, nickname) => {
+        const trimmed = nickname.trim();
+        set((s) => ({
+          ownedCreatures: s.ownedCreatures.map((c) =>
+            c.instanceId === instanceId
+              ? { ...c, nickname: trimmed || undefined }
+              : c,
+          ),
+        }));
+      },
+
+      markCreaturesMet: (creatureIds, stageId) => {
+        set((s) => {
+          const next = { ...s.metCreatures };
+          let changed = false;
+          for (const id of creatureIds) {
+            if (!next[id]) {
+              next[id] = { firstSeenStageId: stageId };
+              changed = true;
+            }
+          }
+          return changed ? { metCreatures: next } : {};
+        });
+      },
+
+      resetAll: () => {
+        set({
+          displayName: 'Trainer',
+          gold: 200,
+          gems: 500,
+          ownedCreatures: [],
+          team: DEFAULT_TEAM,
           completedStages: {},
           seenChapterIntros: {},
+          hasSelectedStarter: false,
+          metCreatures: {},
         });
       },
     }),
@@ -192,7 +228,7 @@ export const usePlayerStore = create<PlayerState>()(
       version: 2,
       storage: createJSONStorage(() => AsyncStorage),
       // Older saves reference creature IDs that no longer exist. Wipe the
-      // inventory and team; let the rehydrate hook below grant a fresh starter.
+      // inventory and team; the layout guard then routes to onboarding.
       migrate: (_persistedState, _version) => ({
         displayName: 'Trainer',
         gold: 200,
@@ -201,13 +237,16 @@ export const usePlayerStore = create<PlayerState>()(
         team: DEFAULT_TEAM,
         completedStages: {},
         seenChapterIntros: {},
+        hasSelectedStarter: false,
+        metCreatures: {},
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
-          if (state.ownedCreatures.length === 0) {
-            const { owned, team } = buildStarterInventory();
-            state.ownedCreatures = owned;
-            state.team = team;
+          // Legacy migration: a save from before starter-selection existed
+          // (v1) already has ownedCreatures populated. Mark them as
+          // already-selected so they're not forced through the picker.
+          if (state.ownedCreatures.length > 0 && !state.hasSelectedStarter) {
+            state.hasSelectedStarter = true;
           }
           state.hydrated = true;
         }
@@ -217,6 +256,17 @@ export const usePlayerStore = create<PlayerState>()(
 );
 
 // Helpers
+
+// What to display for a creature: nickname if set, else species name. Pass
+// nothing to fall back to the species (used when only the species id is
+// known, e.g. enemy units).
+export function displayNameFor(
+  owned: OwnedCreature | undefined,
+  speciesName: string,
+): string {
+  return owned?.nickname?.trim() || speciesName;
+}
+
 export function getOwnedById(instanceId: string | null): OwnedCreature | undefined {
   if (!instanceId) return undefined;
   return usePlayerStore.getState().ownedCreatures.find((c) => c.instanceId === instanceId);
