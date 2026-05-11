@@ -23,7 +23,7 @@ cd app                      # all commands run from here
 npm start                   # expo dev server
 npm run web -- --clear      # web (use --clear after route changes)
 npm run ios                 # iOS simulator (needs Xcode)
-npm test                    # vitest engine tests (16 currently pass)
+npm test                    # vitest engine tests (~30 currently pass)
 npm run typecheck           # tsc --noEmit
 ```
 
@@ -32,52 +32,65 @@ If you add or rename a route, run `expo start` once so it regenerates
 `Argument of type '/foo' is not assignable to ...` — that's stale types,
 not a real bug.
 
+To see `console.log` output from any test (sprite dumps, balance simulator),
+run `npx vitest run --reporter=verbose <path>`. Plain `npm test` swallows it.
+
 ## Project structure
 
 ```
 app/
-├── app/                      # Expo Router file-based routes
-│   ├── _layout.tsx           # root stack: tabs + intro/preview/battle modals
+├── app/                          # Expo Router file-based routes
+│   ├── _layout.tsx               # root stack: tabs + intro/preview/battle/
+│   │                             #   onboarding/outro modals
+│   ├── +html.tsx                 # web HTML shell — global CSS (load-bearing!)
 │   ├── (tabs)/
-│   │   ├── _layout.tsx       # tab bar (Home, Battle, Pets); headers hidden
-│   │   ├── index.tsx         # home — showcase, stats, "Continue Adventure",
-│   │   │                     #   field notes, Start New Game (2-step confirm)
-│   │   ├── battle.tsx        # campaign / stage select, grouped by chapter
-│   │   └── creatures.tsx     # team builder + pet collection + detail panel
-│   ├── intro/[chapter].tsx   # animated chapter intro (lines fade in
-│   │                         #   sequentially, then "Begin" appears)
-│   ├── preview/[stageId].tsx # pre-battle team-vs-team matchup screen
-│   ├── battle/[stageId].tsx  # active battle playback (animated)
+│   │   ├── _layout.tsx           # tab bar (Home, Battle, Pets); gates new
+│   │   │                         #   players to /onboarding/select-starter
+│   │   ├── index.tsx             # home — showcase, stats, "Continue Adventure",
+│   │   │                         #   field notes, Start New Game (2-step confirm)
+│   │   ├── battle.tsx            # campaign / stage select, grouped by chapter
+│   │   └── creatures.tsx         # team builder + pet collection + Field Journal
+│   ├── onboarding/
+│   │   └── select-starter.tsx    # 3-step: trainer name → pick 2 of 5 → nickname
+│   ├── intro/[chapter].tsx       # animated chapter intro (sequential fade-in)
+│   ├── preview/[stageId].tsx     # pre-battle team-vs-team matchup + boss taunt
+│   ├── battle/[stageId].tsx      # active battle playback (animated)
+│   ├── outro/index.tsx           # plays once after the final boss
 │   └── +not-found.tsx
 ├── src/
-│   ├── engine/               # PURE LOGIC — no UI imports
-│   │   ├── battle.ts         # simulateBattle() — returns BattleEvent[]
-│   │   ├── damage.ts         # damage formula
-│   │   ├── ai.ts             # target / ability selection
-│   │   ├── types.ts          # 6-role chart (predator/swift/tough/cunning/
-│   │   │                     #   social/wild) + TYPE_COLORS
-│   │   ├── stats.ts          # stat scaling per level + rarity
-│   │   ├── rng.ts            # Mulberry32 deterministic PRNG
-│   │   ├── buffs.ts          # effective-stat + buff tick
-│   │   └── __tests__/        # vitest engine tests
+│   ├── engine/                   # PURE LOGIC — no UI imports
+│   │   ├── battle.ts             # simulateBattle() — returns BattleEvent[]
+│   │   ├── damage.ts             # damage formula + crit/dodge on SPD diff
+│   │   ├── ai.ts                 # 6 role-specific personality policies
+│   │   ├── types.ts              # 6-role chart + TYPE_COLORS
+│   │   ├── stats.ts              # stat scaling per level + XP curve
+│   │   ├── rng.ts                # Mulberry32 deterministic PRNG
+│   │   ├── buffs.ts              # effective-stat + buff tick
+│   │   ├── recruitment.ts        # post-victory recruit roll (rarity-tiered)
+│   │   └── __tests__/            # engine.test.ts (assertions) +
+│   │                             #   balance.test.ts (diagnostic only)
 │   ├── data/
-│   │   ├── creatures.ts      # 20 cats/dogs with stats + abilities
-│   │   ├── abilities.ts      # ~24 role-themed abilities
-│   │   ├── stages.ts         # 10 campaign stages, 2 chapters
-│   │   ├── chapters.ts       # chapter title + intro story beats
-│   │   └── pixelSprites.ts   # 16×16 hand-drawn templates + per-creature
-│   │                         #   palettes (validated at module load)
+│   │   ├── creatures.ts          # 24 pets (cats/dogs/birds) with stats
+│   │   ├── abilities.ts          # ~24 role-themed abilities
+│   │   ├── stages.ts             # 15 campaign stages, 3 chapters
+│   │   ├── chapters.ts           # chapter title + intro story beats (Ch1-3)
+│   │   ├── bosses.ts             # boss personas keyed by stageId (taunt +
+│   │   │                         #   victory line, currently c1s5/c2s5/c3s5)
+│   │   ├── starterCandidates.ts  # 5 commons offered in onboarding
+│   │   ├── spriteGenerator.ts    # procedural 32×32 sprite primitives + composers
+│   │   └── pixelSprites.ts       # TEMPLATES (32×32 generated + legacy 16×16) +
+│   │                             #   per-creature SPRITES (template + palette)
 │   ├── stores/
-│   │   └── playerStore.ts    # zustand persist, version 2, with migrate
+│   │   └── playerStore.ts        # zustand persist, version 2, with migrate
 │   ├── components/
-│   │   ├── battle/           # BattleUnit, HealthBar, DamageNumber
-│   │   ├── creatures/        # CreatureCard
-│   │   └── common/           # CreatureSprite, PixelSprite, CurrencyHeader,
-│   │                         #   RarityBadge
-│   ├── types/index.ts        # shared types (CreatureType, BattleEvent, etc.)
-│   └── theme.ts              # COLORS + RARITY_COLORS
-├── app.json                  # web.output: "static" — DON'T set "single"
-├── metro.config.js           # disables package-exports (see Stack notes)
+│   │   ├── battle/               # BattleUnit, HealthBar, DamageNumber
+│   │   ├── creatures/            # CreatureCard, FieldJournal (encyclopedia)
+│   │   └── common/               # CreatureSprite, PixelSprite, CurrencyHeader,
+│   │                             #   RarityBadge
+│   ├── types/index.ts            # shared types (CreatureType, BattleEvent, etc.)
+│   └── theme.ts                  # COLORS + RARITY_COLORS
+├── app.json                      # web.output: "static" — DON'T set "single"
+├── metro.config.js               # disables package-exports (see Stack notes)
 ├── vitest.config.ts
 └── package.json
 ```
@@ -115,35 +128,50 @@ Super-effective = 1.5×, weak = 0.67×.
 
 ### Pixel sprites
 
-`src/data/pixelSprites.ts` defines 7 templates (cat / catSlim / bigCat /
-dogPerked / dogFloppy / dogStocky / wolf), each a 16×16 grid of palette-index
-chars. Each row is validated to be exactly 16 chars at module load. Each
-creature picks a template + a 9-color palette. `<PixelSprite>` renders the
-grid as a 16×16 grid of `<View>` cells.
+`src/data/spriteGenerator.ts` is the main path: procedural drawing primitives
+(ellipse, rect, triangle, polyline, thickLine) compose 32×32 full-body
+sprites via per-animal composers (`generateCat`, `generateDog`, `generateWolf`,
+`generateBird`, `generateOwl`). Every composer ends with `finish(g)` which
+runs the **outline pass** (edge body pixels → palette 2) and **highlight
+pass** (topmost interior pixel per column → palette 3). That pipeline is
+what makes sprites read as polished — don't bypass it.
 
-To add a new template, add 16 rows of exactly 16 chars (`'.'` = transparent,
-`'0'-'8'` = palette index). The validator throws on mismatch.
+`src/data/pixelSprites.ts` wires generators into `TEMPLATES` and each
+creature picks a template + a 9-color palette. Templates declare their own
+`grid: 16 | 32` so legacy 16×16 templates remain renderable. The `tmpl()`
+helper validates row dimensions at module load; mistakes throw immediately.
+`<PixelSprite>` reads the per-template grid size and renders cells as Views.
 
 ### Save / persistence
 
 Zustand persist key `creature-clash-player`, version `2`. Bump version + extend
 the `migrate` callback whenever you change the persisted schema or rename a
-creature ID. The migrate function returns a wiped state; the rehydrate hook
-then grants a fresh starter pack via `buildStarterInventory`.
+creature ID. The migrate function wipes data; the rehydrate hook adopts
+legacy saves by marking `hasSelectedStarter = true` if they already have
+creatures.
 
-Starter pack: one of each role at level 3, 200 gold, 500 gems.
+Persisted fields beyond the obvious: `hasSelectedStarter` (gates onboarding
+redirect), `hasSeenOutro` (gates final-boss outro), `seenChapterIntros`
+(gates chapter intros), `metCreatures` (drives Field Journal silhouettes).
 
-`resetAll()` is exposed on the store and wired to the home-screen "Start New
-Game" button (two-tap confirm).
+Starter flow: new players are redirected to `/onboarding/select-starter`
+(picks 2 of 5 commons + sets trainer name + nicknames). After `selectStarters`,
+they have 2 pets at level 3, 200 gold, 500 gems.
+
+`resetAll()` clears everything (including `hasSelectedStarter`) and is wired
+to the home-screen "Start New Game" button (two-tap confirm).
 
 ### Navigation flow
 
 ```
-Home tab "Continue Adventure" → /battle (stage list)
+First launch / reset       → /onboarding/select-starter (tabs layout gates)
+Home "Continue Adventure"  → /battle (stage list)
 Tap stage → if first-of-chapter and unread intro: /intro/[chapter] → /preview/[stageId]
             else: /preview/[stageId]
-Preview "FIGHT" → /battle/[stageId]
-Battle end → "Continue" replaces with /battle (tab); "Retry" replaces with /preview
+Preview "FIGHT"            → /battle/[stageId]
+Battle end (normal stage)  → "Continue" → /battle ; "Retry" → /preview
+Battle end (final boss,    → "Continue" → /outro (once), then /battle
+  first clear)
 ```
 
 Stage unlock: a stage is unlocked iff the previous one in `STAGES[]` order is
@@ -151,27 +179,34 @@ in `completedStages`.
 
 ## What's done
 
-- **Phase 1 core loop**: engine, 20 creatures, 24 abilities, 10 stages, team
-  builder, deterministic battle with animated playback (sprite lunge / hit
-  shake / damage numbers / status icons / cooldown badges / type-keyed flash)
-- **Theme**: cats/dogs roster with role-based combat, narrative stage names
-- **Pre-battle preview** with team-vs-team matchup highlights
-- **Procedural pixel sprites** (16×16) for all 20 creatures
-- **Chapter intros** with sequential line fade-in (Ch.1 cozy, Ch.2 first edge)
-- **Save migration v1→v2** with two-tap "Start New Game" reset
-- **16 engine tests** passing; web bundle exports clean
+- **Engine**: deterministic battle, 6-role chart, 24 abilities, 6 AI
+  personalities (Hunter/Skirmisher/Anchor/Saboteur/Supporter/Berserker),
+  crit + dodge on SPD differential, animated playback
+- **Roster**: 24 creatures across cats, dogs, and birds; rarity tiers
+  common → legendary
+- **Content**: 15 stages across 3 chapters with chapter intros, named
+  boss personas (taunt + victory line) for c1s5/c2s5/c3s5, outro
+- **Onboarding**: 3-step flow (name → pick 2 of 5 → nickname). Layout
+  guard redirects new players until starter is selected.
+- **Reward loop**: post-victory level-up beats with HP/ATK deltas,
+  recruitment rolls from defeated enemies (rarer = lower drop rate),
+  Field Journal encyclopedia with met-tracking + filter chips
+- **Sprites**: procedural 32×32 full-body sprites for every creature
+  with outline + top-highlight finish pipeline
+- **Web**: clean static export; tested only on web
+- **Balance simulator**: `src/engine/__tests__/balance.test.ts` is
+  informational, never fails. Simulates each stage 100× across player
+  progression scenarios and logs win-rate tables to console.
 
 ## Not yet done
 
-- AI personalities + crits/dodges (battles too uniform)
-- Audio (SFX + BGM via `expo-av`)
-- Level-up feedback flow (XP awarded but no visual feedback)
+- Audio (SFX + BGM via `expo-av`) — biggest remaining feel gap
 - Supabase auth + cloud save
 - Gacha system (intentionally deferred per user)
-- Real higher-fidelity pixel art (32×32 PNGs would drop into `<CreatureSprite>`
-  alongside the procedural fallback)
-- More chapters / stages / species (rooftop birds, sewer reptiles)
-- iOS / Android EAS build, App Store assets
+- Higher-fidelity hand-drawn pixel art (the procedural sprites are a
+  baseline; PNGs could drop in alongside via `<CreatureSprite>`)
+- Chapter 4+ (the outro hints at the Riverbed and reptiles)
+- iOS / Android EAS build, App Store assets — native targets untested
 
 ## Conventions
 
@@ -185,3 +220,13 @@ in `completedStages`.
 - `web.output` in `app.json` MUST be `"static"`. Single-page (`"single"`)
   works but skips SSR entirely; we want the static-export pipeline ready
   for shipping.
+
+## Web quirks
+
+- **Web is the only tested target.** Native iOS/Android builds haven't
+  been exercised. Most architecture decisions assume web; flag native
+  portability concerns before changing renderer or persistence layers.
+- **`app/+html.tsx` is load-bearing.** Its global CSS disables
+  `user-select` on `[role="button"]`/`[role="tab"]`/`[role="link"]`,
+  which prevents Pressables from selecting their inner Text on tap
+  instead of firing `onPress`. Removing it silently breaks every button.
