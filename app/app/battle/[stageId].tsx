@@ -441,16 +441,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
     backgroundColor: COLORS.panel,
     borderColor: COLORS.border,
     borderWidth: 1,
-    minWidth: 60,
+    minWidth: 68,
+    minHeight: 40,
     alignItems: 'center',
+    justifyContent: 'center',
+    // react-native-web pass-throughs — prevent the inner Text from being
+    // selected on tap (which steals the click) and show a pointer.
+    userSelect: 'none',
+    cursor: 'pointer',
   },
-  headerBtnText: { color: COLORS.text, fontWeight: '800' },
+  headerBtnText: {
+    color: COLORS.text,
+    fontWeight: '800',
+    fontSize: 14,
+    userSelect: 'none',
+  },
   stageName: { color: COLORS.text, fontWeight: '900', fontSize: 15, textAlign: 'center' },
   stageMeta: { color: COLORS.textDim, fontSize: 11, textAlign: 'center' },
   arena: {
