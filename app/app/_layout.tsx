@@ -56,6 +56,10 @@ export default function RootLayout() {
             name="battle/[stageId]"
             options={{ presentation: 'fullScreenModal' }}
           />
+          <Stack.Screen
+            name="outro/index"
+            options={{ animation: 'fade', presentation: 'fullScreenModal' }}
+          />
         </Stack>
       </ThemeProvider>
     </GestureHandlerRootView>

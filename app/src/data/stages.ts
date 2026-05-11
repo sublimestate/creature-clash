@@ -1,9 +1,13 @@
 import { StageDefinition } from '../types';
 
-// Chapter 1: The Backyard. Friendly territory. Easing in.
-// Chapter 2: The Strays. Things get rougher. Tone darkens slightly.
-// Later chapters (not yet built): The Park, The Sewers, The Forest Edge —
-// each will introduce new species (birds, reptiles, etc.).
+// Stage balance assumptions:
+// - Player starts with 2 pets at level 3 (STARTER_LEVEL).
+// - Player levels up via XP rewards across stages.
+// - Player recruits new pets stochastically (rollRecruitment) starting at
+//   c1s1 — expected ~1 recruit per 2 stages on the early commons.
+// - Bosses (c*s5) are intentionally harder than the surrounding stages.
+//
+// See src/engine/__tests__/balance.test.ts for win-rate simulations.
 
 export const STAGES: StageDefinition[] = [
   {
@@ -11,100 +15,100 @@ export const STAGES: StageDefinition[] = [
     name: 'Backyard Tussle',
     chapter: 1,
     index: 1,
-    enemyLevel: 2,
+    enemyLevel: 1,
     enemies: ['pup', 'tabby'],
     goldReward: 50,
-    xpReward: 30,
+    xpReward: 80,
   },
   {
     id: 'c1s2',
     name: 'Garden Hose Standoff',
     chapter: 1,
     index: 2,
-    enemyLevel: 3,
-    enemies: ['yapper', 'sphynx', 'tabby'],
+    enemyLevel: 2,
+    enemies: ['yapper', 'sphynx'],
     goldReward: 70,
-    xpReward: 45,
+    xpReward: 110,
   },
   {
     id: 'c1s3',
     name: 'Porch Patrol',
     chapter: 1,
     index: 3,
-    enemyLevel: 4,
-    enemies: ['pugling', 'pugling', 'mutt'],
+    enemyLevel: 3,
+    enemies: ['pugling', 'pup'],
     goldReward: 90,
-    xpReward: 60,
+    xpReward: 140,
   },
   {
     id: 'c1s4',
     name: 'Picket Fence Brawl',
     chapter: 1,
     index: 4,
-    enemyLevel: 5,
+    enemyLevel: 4,
     enemies: ['sphynx', 'vizsla', 'yapper'],
     goldReward: 110,
-    xpReward: 75,
+    xpReward: 170,
   },
   {
     id: 'c1s5',
     name: 'Top Cat — Block Champion',
     chapter: 1,
     index: 5,
-    enemyLevel: 7,
-    enemies: ['bengal', 'tabby', 'tabby', 'pup'],
+    enemyLevel: 5,
+    enemies: ['bengal', 'tabby', 'pup'],
     goldReward: 180,
-    xpReward: 120,
+    xpReward: 260,
   },
   {
     id: 'c2s1',
     name: 'Alley Skirmish',
     chapter: 2,
     index: 1,
-    enemyLevel: 8,
+    enemyLevel: 6,
     enemies: ['mutt', 'mutt', 'sphynx'],
     goldReward: 130,
-    xpReward: 90,
+    xpReward: 200,
   },
   {
     id: 'c2s2',
     name: 'Dumpster Diplomacy',
     chapter: 2,
     index: 2,
-    enemyLevel: 9,
-    enemies: ['beagle', 'mutt', 'mutt', 'pugling'],
+    enemyLevel: 7,
+    enemies: ['beagle', 'mutt', 'pugling'],
     goldReward: 150,
-    xpReward: 110,
+    xpReward: 240,
   },
   {
     id: 'c2s3',
     name: 'Shortcut Through the Lot',
     chapter: 2,
     index: 3,
-    enemyLevel: 10,
+    enemyLevel: 8,
     enemies: ['whippet', 'mutt', 'sphynx', 'yapper'],
     goldReward: 170,
-    xpReward: 130,
+    xpReward: 280,
   },
   {
     id: 'c2s4',
     name: 'Rooftop Confrontation',
     chapter: 2,
     index: 4,
-    enemyLevel: 11,
+    enemyLevel: 9,
     enemies: ['sable', 'bengal', 'sphynx'],
     goldReward: 200,
-    xpReward: 150,
+    xpReward: 320,
   },
   {
     id: 'c2s5',
     name: 'Stray King — Boss',
     chapter: 2,
     index: 5,
-    enemyLevel: 13,
+    enemyLevel: 10,
     enemies: ['husky', 'mutt', 'beagle', 'whippet', 'border'],
-    goldReward: 350,
-    xpReward: 240,
+    goldReward: 380,
+    xpReward: 560,
   },
 ];
 

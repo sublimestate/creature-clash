@@ -24,7 +24,8 @@ export function statsAtLevel(def: CreatureDefinition, level: number): Stats {
   };
 }
 
-// XP curve: xp needed to reach next level
+// XP curve: xp needed to reach the *next* level from `level`.
+// Tuned so a careful early-game player levels up roughly every 1-2 stages.
 export function xpForLevel(level: number): number {
-  return Math.round(50 * Math.pow(level, 1.5));
+  return Math.round(30 * Math.pow(level, 1.3));
 }

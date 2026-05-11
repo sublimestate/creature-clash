@@ -13,7 +13,7 @@ import {
 } from '../../src/components/battle/BattleUnit';
 import { getBoss } from '../../src/data/bosses';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
-import { STAGES_BY_ID } from '../../src/data/stages';
+import { STAGES, STAGES_BY_ID } from '../../src/data/stages';
 import { simulateBattle, buildEnemyTeam, makeBattleCreature, TeamSlot } from '../../src/engine/battle';
 import { rollRecruitment } from '../../src/engine/recruitment';
 import { Rng } from '../../src/engine/rng';
@@ -38,6 +38,8 @@ export default function BattleScreen() {
   const recordStage = usePlayerStore((s) => s.recordStage);
   const markCreaturesMet = usePlayerStore((s) => s.markCreaturesMet);
   const addCreature = usePlayerStore((s) => s.addCreature);
+  const markOutroSeen = usePlayerStore((s) => s.markOutroSeen);
+  const hasSeenOutro = usePlayerStore((s) => s.hasSeenOutro);
 
   // Post-battle results to surface in the victory banner.
   const [levelUps, setLevelUps] = useState<OwnedCreature[]>([]);
@@ -357,7 +359,21 @@ export default function BattleScreen() {
 
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
             <Pressable
-              onPress={() => router.replace('/battle')}
+              onPress={() => {
+                // After beating the final stage for the first time, route
+                // to the outro instead of back to the campaign list.
+                const finalId = STAGES[STAGES.length - 1].id;
+                if (
+                  winner === 'player' &&
+                  stage.id === finalId &&
+                  !hasSeenOutro
+                ) {
+                  markOutroSeen();
+                  router.replace('/outro');
+                  return;
+                }
+                router.replace('/battle');
+              }}
               style={styles.button}
             >
               <Text style={styles.buttonText}>Continue</Text>

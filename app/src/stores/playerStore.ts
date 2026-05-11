@@ -21,6 +21,7 @@ interface PlayerState {
   completedStages: Record<string, { stars: number }>;
   seenChapterIntros: Record<number, boolean>;
   hasSelectedStarter: boolean;
+  hasSeenOutro: boolean;
   metCreatures: Record<string, { firstSeenStageId: string }>;
   setName: (name: string) => void;
   addGold: (n: number) => void;
@@ -33,6 +34,7 @@ interface PlayerState {
   awardXp: (instanceIds: string[], amountPerCreature: number) => OwnedCreature[];
   recordStage: (stageId: string, stars: number) => void;
   markChapterIntroSeen: (chapter: number) => void;
+  markOutroSeen: () => void;
   selectStarters: (picks: Array<{ creatureId: string; nickname?: string }>) => void;
   setNickname: (instanceId: string, nickname: string) => void;
   markCreaturesMet: (creatureIds: string[], stageId: string) => void;
@@ -66,6 +68,7 @@ export const usePlayerStore = create<PlayerState>()(
       completedStages: {},
       seenChapterIntros: {},
       hasSelectedStarter: false,
+      hasSeenOutro: false,
       metCreatures: {},
 
       setName: (name) => set({ displayName: name }),
@@ -163,6 +166,10 @@ export const usePlayerStore = create<PlayerState>()(
         });
       },
 
+      markOutroSeen: () => {
+        set((s) => (s.hasSeenOutro ? {} : { hasSeenOutro: true }));
+      },
+
       selectStarters: (picks) => {
         const owned: OwnedCreature[] = picks.map((p) => ({
           instanceId: newInstanceId(),
@@ -218,6 +225,7 @@ export const usePlayerStore = create<PlayerState>()(
           completedStages: {},
           seenChapterIntros: {},
           hasSelectedStarter: false,
+          hasSeenOutro: false,
           metCreatures: {},
         });
       },
@@ -238,6 +246,7 @@ export const usePlayerStore = create<PlayerState>()(
         completedStages: {},
         seenChapterIntros: {},
         hasSelectedStarter: false,
+        hasSeenOutro: false,
         metCreatures: {},
       }),
       onRehydrateStorage: () => (state) => {
