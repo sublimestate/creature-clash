@@ -15,7 +15,11 @@ import { getBoss } from '../../src/data/bosses';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
 import { STAGES_BY_ID } from '../../src/data/stages';
 import { simulateBattle, buildEnemyTeam, makeBattleCreature, TeamSlot } from '../../src/engine/battle';
+import { rollRecruitment } from '../../src/engine/recruitment';
+import { Rng } from '../../src/engine/rng';
+import { statsAtLevel } from '../../src/engine/stats';
 import { usePlayerStore, buildTeamSlots } from '../../src/stores/playerStore';
+import { OwnedCreature } from '../../src/types';
 import { COLORS } from '../../src/theme';
 import { BattleEvent } from '../../src/types';
 
@@ -33,6 +37,11 @@ export default function BattleScreen() {
   const awardXp = usePlayerStore((s) => s.awardXp);
   const recordStage = usePlayerStore((s) => s.recordStage);
   const markCreaturesMet = usePlayerStore((s) => s.markCreaturesMet);
+  const addCreature = usePlayerStore((s) => s.addCreature);
+
+  // Post-battle results to surface in the victory banner.
+  const [levelUps, setLevelUps] = useState<OwnedCreature[]>([]);
+  const [recruit, setRecruit] = useState<OwnedCreature | null>(null);
 
   // Snapshot the team & build TeamSlots once when entering the screen.
   const battleData = useMemo(() => {
@@ -185,14 +194,44 @@ export default function BattleScreen() {
     if (battleData.result.winner === 'player') {
       addGold(stage.goldReward);
       const playerInstanceIds = battleData.playerSlots.map((s) => s.owned.instanceId);
-      awardXp(playerInstanceIds, stage.xpReward);
+      const leveled = awardXp(playerInstanceIds, stage.xpReward);
+      setLevelUps(leveled);
+
       const survivors = battleData.result.playerSurvivors;
       const stars = survivors >= 4 ? 3 : survivors >= 2 ? 2 : 1;
       recordStage(stage.id, stars);
-      // Mark every enemy species as encountered for the field journal.
       markCreaturesMet(stage.enemies, stage.id);
+
+      // Roll for a recruit. Uses a fresh Rng so retrying a stage produces a
+      // different recruit outcome (deterministic per attempt, not per stage).
+      const ownedSpeciesIds = new Set(
+        usePlayerStore.getState().ownedCreatures.map((c) => c.creatureId),
+      );
+      const recruitRoll = rollRecruitment({
+        enemyCreatureIds: stage.enemies,
+        stars,
+        ownedSpeciesIds,
+        rng: new Rng(Date.now() & 0xffffffff),
+      });
+      if (recruitRoll) {
+        // Recruit joins at half the stage's enemy level (minimum 1) so they're
+        // useful soon but not free power.
+        const recruitLevel = Math.max(1, Math.floor(stage.enemyLevel / 2));
+        const added = addCreature(recruitRoll.creatureId, recruitLevel);
+        setRecruit(added);
+      }
     }
-  }, [done, battleData, stage, rewarded, addGold, awardXp, recordStage, markCreaturesMet]);
+  }, [
+    done,
+    battleData,
+    stage,
+    rewarded,
+    addGold,
+    awardXp,
+    recordStage,
+    markCreaturesMet,
+    addCreature,
+  ]);
 
   if (!stage) {
     return (
@@ -274,6 +313,48 @@ export default function BattleScreen() {
               {getBoss(stage.id)!.victoryLine}
             </Text>
           )}
+
+          {winner === 'player' && levelUps.length > 0 && (
+            <View style={styles.beatBlock}>
+              <Text style={styles.beatHeader}>LEVELED UP</Text>
+              {levelUps.map((c) => {
+                const def = CREATURES_BY_ID[c.creatureId];
+                const display = c.nickname?.trim() || def?.name || c.creatureId;
+                const prevStats = def ? statsAtLevel(def, Math.max(1, c.level - 1)) : null;
+                const newStats = def ? statsAtLevel(def, c.level) : null;
+                return (
+                  <View key={c.instanceId} style={styles.beatRow}>
+                    <Text style={styles.beatName}>{display}</Text>
+                    <Text style={styles.beatDetail}>
+                      reached Lv {c.level}
+                      {prevStats && newStats && (
+                        <Text style={styles.beatDelta}>
+                          {'  '}+{newStats.hp - prevStats.hp} HP, +
+                          {newStats.atk - prevStats.atk} ATK
+                        </Text>
+                      )}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {winner === 'player' && recruit && (
+            <View style={[styles.beatBlock, styles.beatRecruit]}>
+              <Text style={[styles.beatHeader, { color: COLORS.good }]}>
+                NEW PET JOINED
+              </Text>
+              <Text style={styles.recruitName}>
+                {CREATURES_BY_ID[recruit.creatureId]?.name ?? recruit.creatureId}{' '}
+                <Text style={styles.beatDetail}>(Lv {recruit.level})</Text>
+              </Text>
+              <Text style={styles.beatDetail}>
+                {CREATURES_BY_ID[recruit.creatureId]?.flavor ?? ''}
+              </Text>
+            </View>
+          )}
+
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
             <Pressable
               onPress={() => router.replace('/battle')}
@@ -405,6 +486,32 @@ const styles = StyleSheet.create({
     marginTop: 12,
     maxWidth: 400,
   },
+  beatBlock: {
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 8,
+    minWidth: 260,
+    maxWidth: 360,
+    gap: 4,
+  },
+  beatRecruit: {
+    backgroundColor: 'rgba(67,227,124,0.10)',
+    borderColor: COLORS.good,
+    borderWidth: 1,
+  },
+  beatHeader: {
+    color: COLORS.accent,
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  beatRow: { flexDirection: 'row', gap: 8, alignItems: 'baseline' },
+  beatName: { color: COLORS.text, fontSize: 14, fontWeight: '800' },
+  beatDetail: { color: COLORS.textDim, fontSize: 12 },
+  beatDelta: { color: COLORS.good, fontSize: 11, fontWeight: '700' },
+  recruitName: { color: COLORS.text, fontSize: 16, fontWeight: '900' },
   button: {
     backgroundColor: COLORS.accent,
     paddingHorizontal: 24,
