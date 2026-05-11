@@ -87,7 +87,8 @@ export default function BattleScreen() {
   const [log, setLog] = useState<string[]>([]);
   const [done, setDone] = useState(false);
   const [paused, setPaused] = useState(false);
-  const [speedIndex, setSpeedIndex] = useState(0);
+  // Default to 2× — 1× felt too sluggish for an auto-battler in playtest.
+  const [speedIndex, setSpeedIndex] = useState(1);
   const [rewarded, setRewarded] = useState(false);
 
   const tickRef = useRef(0);

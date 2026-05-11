@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { CREATURES } from '../../data/creatures';
 import { STAGES_BY_ID } from '../../data/stages';
 import { TYPE_COLORS } from '../../engine/types';
@@ -9,11 +9,14 @@ import { CreatureSprite } from '../common/CreatureSprite';
 
 type Status = 'owned' | 'met' | 'unmet';
 
+type Filter = 'all' | 'owned' | 'met' | 'unmet';
+
 // A small encyclopedia: every creature in the game listed once. Owned and met
 // entries are full-color; unmet entries show the silhouette + "???".
 export function FieldJournal() {
   const owned = usePlayerStore((s) => s.ownedCreatures);
   const met = usePlayerStore((s) => s.metCreatures);
+  const [filter, setFilter] = useState<Filter>('all');
 
   const ownedSpecies = useMemo(() => {
     const set = new Set<string>();
@@ -35,6 +38,8 @@ export function FieldJournal() {
     total: entries.length,
   };
 
+  const visible = entries.filter((e) => filter === 'all' || e.status === filter);
+
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
@@ -47,8 +52,34 @@ export function FieldJournal() {
         A record of every pet you've crossed paths with.
       </Text>
 
+      <View style={styles.filterRow}>
+        <FilterChip
+          label={`All ${stats.total}`}
+          active={filter === 'all'}
+          onPress={() => setFilter('all')}
+        />
+        <FilterChip
+          label={`Owned ${stats.owned}`}
+          active={filter === 'owned'}
+          onPress={() => setFilter('owned')}
+        />
+        <FilterChip
+          label={`Met ${stats.met}`}
+          active={filter === 'met'}
+          onPress={() => setFilter('met')}
+        />
+        <FilterChip
+          label={`Unmet ${stats.total - stats.owned - stats.met}`}
+          active={filter === 'unmet'}
+          onPress={() => setFilter('unmet')}
+        />
+      </View>
+
       <View style={styles.list}>
-        {entries.map(({ def, status }) => (
+        {visible.length === 0 && (
+          <Text style={styles.empty}>Nothing here yet.</Text>
+        )}
+        {visible.map(({ def, status }) => (
           <Entry
             key={def.id}
             creatureId={def.id}
@@ -62,6 +93,31 @@ export function FieldJournal() {
         ))}
       </View>
     </View>
+  );
+}
+
+function FilterChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.chip,
+        active && styles.chipActive,
+        pressed && { opacity: 0.8 },
+      ]}
+    >
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -178,6 +234,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   help: { color: COLORS.textDim, fontSize: 11, fontStyle: 'italic' },
+  filterRow: { flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+  chip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: COLORS.bgElev,
+    borderColor: COLORS.border,
+    borderWidth: 1,
+  },
+  chipActive: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
+  },
+  chipText: { color: COLORS.textDim, fontSize: 11, fontWeight: '700' },
+  chipTextActive: { color: COLORS.bg, fontWeight: '900' },
+  empty: {
+    color: COLORS.textDim,
+    fontSize: 12,
+    fontStyle: 'italic',
+    paddingVertical: 12,
+    textAlign: 'center',
+  },
   list: { gap: 6, marginTop: 4 },
   entry: {
     flexDirection: 'row',

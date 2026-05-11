@@ -31,7 +31,8 @@ export default function HomeScreen() {
   };
 
   const completedCount = Object.keys(completedStages).length;
-  const nextStage = STAGES.find((s) => !completedStages[s.id]) ?? STAGES[STAGES.length - 1];
+  const nextStage = STAGES.find((s) => !completedStages[s.id]);
+  const allCleared = !nextStage;
 
   const showcaseId = owned[0]?.creatureId ?? 'tabby';
   const showcaseDef = CREATURES_BY_ID[showcaseId];
@@ -73,9 +74,13 @@ export default function HomeScreen() {
             { opacity: pressed ? 0.85 : 1 },
           ]}
         >
-          <Text style={styles.bigButtonLabel}>Continue Adventure</Text>
+          <Text style={styles.bigButtonLabel}>
+            {allCleared ? 'Revisit the Block' : 'Continue Adventure'}
+          </Text>
           <Text style={styles.bigButtonSub}>
-            Next: {nextStage.name} (Lv {nextStage.enemyLevel})
+            {allCleared
+              ? 'Replay any stage for more recruits and XP.'
+              : `Next: ${nextStage.name} (Lv ${nextStage.enemyLevel})`}
           </Text>
         </Pressable>
 

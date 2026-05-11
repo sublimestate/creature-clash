@@ -33,6 +33,8 @@ export default function PreviewScreen() {
   const stage = STAGES_BY_ID[stageId ?? ''];
   const team = usePlayerStore((s) => s.team);
   const owned = usePlayerStore((s) => s.ownedCreatures);
+  const completedCount = usePlayerStore((s) => Object.keys(s.completedStages).length);
+  const isFirstFight = completedCount === 0;
 
   const playerUnits = useMemo<PreviewUnit[]>(() => {
     return buildTeamSlots().map((slot) => {
@@ -127,6 +129,20 @@ export default function PreviewScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
+        {isFirstFight && (
+          <View style={styles.tutorialBox}>
+            <Text style={styles.tutorialTitle}>FIRST FIGHT</Text>
+            <Text style={styles.tutorialBody}>
+              <Text style={{ color: COLORS.good, fontWeight: '900' }}>▲</Text>{' '}
+              on a card means your pet has a type advantage against at least
+              one enemy — they hit harder.{' '}
+              <Text style={{ color: COLORS.danger, fontWeight: '900' }}>▼</Text>{' '}
+              means every matchup is a disadvantage. Front-row pets take hits
+              first; back-row are protected until the front falls.
+            </Text>
+          </View>
+        )}
+
         {(() => {
           const boss = getBoss(stage.id);
           if (!boss) return null;
@@ -320,6 +336,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   scroll: { padding: 12, paddingBottom: 40, gap: 10 },
+  tutorialBox: {
+    backgroundColor: COLORS.panel,
+    borderColor: COLORS.accent,
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 12,
+    gap: 6,
+  },
+  tutorialTitle: {
+    color: COLORS.accent,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  tutorialBody: {
+    color: COLORS.text,
+    fontSize: 12,
+    lineHeight: 18,
+  },
   bossBlock: {
     flexDirection: 'row',
     gap: 12,
