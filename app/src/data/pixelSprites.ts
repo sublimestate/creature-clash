@@ -1,5 +1,8 @@
-// Procedural pixel-art avatars. Each sprite is a 16×16 grid where each
-// character is a palette index (0 = transparent, 1..8 = palette colors).
+// Procedural pixel-art avatars.
+//
+// Templates are 32×32 (full-body) generated procedurally — see
+// spriteGenerator.ts. Each char in a row is a palette index
+// (0 = transparent, 1..8 = palette colors).
 //
 // Palette layout (by index):
 //   0 = transparent
@@ -18,6 +21,7 @@ export type PixelPalette = readonly [
 ];
 
 export interface PixelTemplate {
+  readonly grid: 16 | 32;
   readonly rows: readonly string[];
 }
 
@@ -26,7 +30,29 @@ export interface PixelSpriteData {
   palette: PixelPalette;
 }
 
-// Validates each row at module-load time.
+// Build a template, validating each row is exactly `grid` chars at module-load.
+function tmpl(grid: 16 | 32, rows: readonly string[]): PixelTemplate {
+  if (rows.length !== grid) {
+    throw new Error(`pixel template: expected ${grid} rows, got ${rows.length}`);
+  }
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.length !== grid) {
+      throw new Error(
+        `pixel template row ${i}: expected ${grid} chars, got ${row.length}: "${row}"`,
+      );
+    }
+    for (const ch of row) {
+      if (ch !== '.' && (ch < '0' || ch > '8')) {
+        throw new Error(`pixel-row invalid char "${ch}" in: "${row}"`);
+      }
+    }
+  }
+  return { grid, rows };
+}
+
+// Legacy r() — 16-char alias, kept so the existing 16x16 templates below
+// still parse. New templates should use tmpl(32, [...]).
 function r(s: string): string {
   if (s.length !== 16) {
     throw new Error(`pixel-row must be 16 chars, got ${s.length}: "${s}"`);
@@ -42,7 +68,7 @@ function r(s: string): string {
 // ── Templates ────────────────────────────────────────────────────────
 
 // Standard housecat — pointy ears, round face
-const cat: PixelTemplate = {
+const cat: PixelTemplate = { grid: 16,
   rows: [
     r('................'),
     r('..11........11..'),
@@ -64,7 +90,7 @@ const cat: PixelTemplate = {
 };
 
 // Slim cat (sphynx) — bigger pointy ears, narrower face
-const catSlim: PixelTemplate = {
+const catSlim: PixelTemplate = { grid: 16,
   rows: [
     r('................'),
     r('.11..........11.'),
@@ -86,7 +112,7 @@ const catSlim: PixelTemplate = {
 };
 
 // Big cat with mane (lion / tiger). Mane = palette index 8.
-const bigCat: PixelTemplate = {
+const bigCat: PixelTemplate = { grid: 16,
   rows: [
     r('................'),
     r('..88........88..'),
@@ -108,7 +134,7 @@ const bigCat: PixelTemplate = {
 };
 
 // Dog with perked ears (terrier / shepherd / doberman)
-const dogPerked: PixelTemplate = {
+const dogPerked: PixelTemplate = { grid: 16,
   rows: [
     r('................'),
     r('.11..........11.'),
@@ -130,7 +156,7 @@ const dogPerked: PixelTemplate = {
 };
 
 // Dog with floppy ears (beagle / hound / pup)
-const dogFloppy: PixelTemplate = {
+const dogFloppy: PixelTemplate = { grid: 16,
   rows: [
     r('................'),
     r('....11111111....'),
@@ -152,7 +178,7 @@ const dogFloppy: PixelTemplate = {
 };
 
 // Pug / bulldog — wide squat face, short snout
-const dogStocky: PixelTemplate = {
+const dogStocky: PixelTemplate = { grid: 16,
   rows: [
     r('................'),
     r('...11......11...'),
@@ -174,7 +200,7 @@ const dogStocky: PixelTemplate = {
 };
 
 // Wolf — long pointed ears, narrow face
-const wolf: PixelTemplate = {
+const wolf: PixelTemplate = { grid: 16,
   rows: [
     r('................'),
     r('11............11'),
@@ -195,7 +221,29 @@ const wolf: PixelTemplate = {
   ],
 };
 
+// ── 32×32 full-body templates (procedurally generated) ─────────────────
+
+import {
+  generateBird,
+  generateCat,
+  generateDog,
+  generateOwl,
+  generateWolf,
+} from './spriteGenerator';
+
+const catFull: PixelTemplate = tmpl(32, generateCat({ ears: 'pointy', tail: 'curled' }));
+const catSlimFull: PixelTemplate = tmpl(32, generateCat({ ears: 'pointy', build: 'slender', tail: 'curled' }));
+const bigCatFull: PixelTemplate = tmpl(32, generateCat({ ears: 'pointy', build: 'stocky', mane: true, tail: 'fluffy' }));
+const dogPerkedFull: PixelTemplate = tmpl(32, generateDog({ ears: 'perked', tail: 'short' }));
+const dogFloppyFull: PixelTemplate = tmpl(32, generateDog({ ears: 'floppy', tail: 'short' }));
+const dogStockyFull: PixelTemplate = tmpl(32, generateDog({ ears: 'floppy', build: 'stocky', tail: 'short' }));
+const wolfFull: PixelTemplate = tmpl(32, generateWolf());
+const birdFull: PixelTemplate = tmpl(32, generateBird());
+const owlFull: PixelTemplate = tmpl(32, generateOwl());
+
 export const TEMPLATES = {
+  // Legacy 16×16 — kept for fallback / unmapped creatures during the
+  // sprite redesign.
   cat,
   catSlim,
   bigCat,
@@ -203,6 +251,16 @@ export const TEMPLATES = {
   dogFloppy,
   dogStocky,
   wolf,
+  // 32×32 full-body, used by every creature in SPRITES below.
+  catFull,
+  catSlimFull,
+  bigCatFull,
+  dogPerkedFull,
+  dogFloppyFull,
+  dogStockyFull,
+  wolfFull,
+  birdFull,
+  owlFull,
 } as const;
 
 export type TemplateId = keyof typeof TEMPLATES;
@@ -227,110 +285,110 @@ function pal(
 export const SPRITES: Record<string, PixelSpriteData> = {
   // Common
   tabby: {
-    template: 'cat',
+    template: 'catFull',
     palette: pal('#D89055', '#A05F2A', '#F2B97A', '#FFE9B0', '#1B1B1B', '#3A1F12', '#7A2C1F', '#7A4623'),
   },
   pup: {
-    template: 'dogFloppy',
+    template: 'dogFloppyFull',
     palette: pal('#E8C57A', '#A07840', '#F4D690', '#FFFFFF', '#1B1B1B', '#3A1F12', '#7A2C1F', '#9C7838'),
   },
   yapper: {
-    template: 'dogPerked',
+    template: 'dogPerkedFull',
     palette: pal('#F0E0BC', '#B89866', '#FFF2D0', '#FFFFFF', '#1B1B1B', '#3A1F12', '#7A2C1F', '#A88A5A'),
   },
   pugling: {
-    template: 'dogStocky',
+    template: 'dogStockyFull',
     palette: pal('#D2B48C', '#7A5A3A', '#E8CCA0', '#FFE9B0', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#5C3F22'),
   },
   sphynx: {
-    template: 'catSlim',
+    template: 'catSlimFull',
     palette: pal('#E8B89A', '#B07A5A', '#F5D0B6', '#9CD9FF', '#1B1B1B', '#7A2C1F', '#7A2C1F', '#8A5A38'),
   },
   mutt: {
-    template: 'dogFloppy',
+    template: 'dogFloppyFull',
     palette: pal('#7A6450', '#3F3225', '#A28A6E', '#FFFFFF', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#2A1F14'),
   },
 
   // Uncommon
   bengal: {
-    template: 'cat',
+    template: 'catFull',
     palette: pal('#E08A2A', '#7C4310', '#FFB35A', '#FFE9B0', '#1B1B1B', '#3A1F12', '#7A2C1F', '#3A2008'),
   },
   beagle: {
-    template: 'dogFloppy',
+    template: 'dogFloppyFull',
     palette: pal('#F2E0B8', '#A05F2A', '#FFF2D0', '#FFFFFF', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#3A1F12'),
   },
   whippet: {
-    template: 'dogPerked',
+    template: 'dogPerkedFull',
     palette: pal('#C8B89A', '#7A6A4F', '#E0D2B0', '#FFFFFF', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#5A4A30'),
   },
   maine: {
-    template: 'cat',
+    template: 'catFull',
     palette: pal('#9C6A3A', '#4A2810', '#C48A55', '#FFE9B0', '#3DD68C', '#3A1F12', '#7A2C1F', '#3A2008'),
   },
   vizsla: {
-    template: 'dogFloppy',
+    template: 'dogFloppyFull',
     palette: pal('#C8693A', '#6A3010', '#E08855', '#FFFFFF', '#1B1B1B', '#3A1F12', '#7A2C1F', '#8A3818'),
   },
 
   // Rare
   sable: {
-    template: 'cat',
+    template: 'catFull',
     palette: pal('#2A2A2E', '#0E0E12', '#4A4A50', '#3DD68C', '#FFFFFF', '#5A2A1F', '#7A2C1F', '#1A1A20'),
   },
   border: {
-    template: 'dogPerked',
+    template: 'dogPerkedFull',
     palette: pal('#1F1F23', '#0A0A0E', '#FFFFFF', '#7BCBFF', '#1B1B1B', '#3A1F12', '#7A2C1F', '#FFFFFF'),
   },
   doberman: {
-    template: 'dogPerked',
+    template: 'dogPerkedFull',
     palette: pal('#2A2018', '#0E0A06', '#7A4A28', '#E54B4B', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#7A4A28'),
   },
   husky: {
-    template: 'wolf',
+    template: 'wolfFull',
     palette: pal('#D8D8D8', '#6A6A6E', '#FFFFFF', '#7BCBFF', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#3A3A40'),
   },
 
   // Epic
   mastiff: {
-    template: 'dogStocky',
+    template: 'dogStockyFull',
     palette: pal('#7A4A28', '#3A2008', '#A06A38', '#FFE9B0', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#3A2008'),
   },
   lynx: {
-    template: 'cat',
+    template: 'catFull',
     palette: pal('#A88555', '#5C3F22', '#D8AC78', '#9CD96A', '#1B1B1B', '#3A1F12', '#7A2C1F', '#3A2008'),
   },
 
   // Chapter 3: The Park — birds. Reuses cat template (small birds) and
   // wolf template (large bird) — palette differences carry the species feel.
   pigeon: {
-    template: 'catSlim',
+    template: 'birdFull',
     palette: pal('#8E96A8', '#3E4658', '#C0C6D4', '#FF7849', '#1B1B1B', '#FFB347', '#7A2C1F', '#2E3340'),
   },
   crow: {
-    template: 'catSlim',
+    template: 'birdFull',
     palette: pal('#1A1A20', '#0A0A0E', '#3A3A48', '#FFD93D', '#FFFFFF', '#2E2E36', '#7A2C1F', '#0E0E12'),
   },
   hawk: {
-    template: 'cat',
+    template: 'birdFull',
     palette: pal('#7A4A28', '#3A2008', '#C48A55', '#FFD93D', '#1B1B1B', '#FFB347', '#7A2C1F', '#3A2008'),
   },
   owl: {
-    template: 'wolf',
+    template: 'owlFull',
     palette: pal('#6A5A40', '#2E2818', '#A89070', '#FFD93D', '#1B1B1B', '#FFB347', '#7A2C1F', '#3A2818'),
   },
 
   // Legendary
   lion: {
-    template: 'bigCat',
+    template: 'bigCatFull',
     palette: pal('#E8B05C', '#7A4520', '#FFD493', '#FFE9B0', '#1B1B1B', '#3A1F12', '#7A2C1F', '#A06A28'),
   },
   tiger: {
-    template: 'bigCat',
+    template: 'bigCatFull',
     palette: pal('#E07A1F', '#1B1B1B', '#FFB35A', '#FFE9B0', '#1B1B1B', '#3A1F12', '#7A2C1F', '#1B1B1B'),
   },
   direwolf: {
-    template: 'wolf',
+    template: 'wolfFull',
     palette: pal('#3A3F4A', '#14161E', '#6A7282', '#9CD96A', '#1B1B1B', '#1B1B1B', '#7A2C1F', '#1A1C24'),
   },
 };

@@ -27,6 +27,7 @@ const SPEEDS: Array<{ label: string; ms: number }> = [
   { label: '1×', ms: 800 },
   { label: '2×', ms: 400 },
   { label: '3×', ms: 200 },
+  { label: '4×', ms: 100 },
 ];
 
 export default function BattleScreen() {

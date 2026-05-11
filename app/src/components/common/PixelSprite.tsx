@@ -9,29 +9,30 @@ interface Props {
   flip?: boolean;
 }
 
-const GRID = 16;
-
-// Renders a creature as a 16×16 grid of colored cells. Each cell is one
-// flex View. The whole sprite is 256 cells; React Native handles this fine
-// for static sprites and there are at most ~10 visible at once.
+// Renders a creature as an N×N grid of colored cells where N is the
+// template's declared `grid` (16 or 32). Each cell is one flex View;
+// React Native handles this fine for static sprites at our visible counts.
 export function PixelSprite({ creatureId, size, fainted, flip }: Props) {
   const data: PixelSpriteData | undefined = SPRITES[creatureId];
-  const cellSize = size / GRID;
 
   // Pre-compute the row arrays — character + palette color per cell.
-  const rows = useMemo(() => {
+  const rendered = useMemo(() => {
     if (!data) return null;
     const tmpl = TEMPLATES[data.template];
-    return tmpl.rows.map((row) =>
+    const grid = tmpl.grid;
+    const rows = tmpl.rows.map((row) =>
       Array.from(row).map((ch) => {
         if (ch === '.') return null;
         const idx = ch.charCodeAt(0) - 48; // '0' = 48
         return data.palette[idx] ?? null;
       }),
     );
+    return { grid, rows };
   }, [data]);
 
-  if (!rows) return null;
+  if (!rendered) return null;
+
+  const cellSize = size / rendered.grid;
 
   return (
     <View
@@ -45,7 +46,7 @@ export function PixelSprite({ creatureId, size, fainted, flip }: Props) {
         },
       ]}
     >
-      {rows.map((row, ri) => (
+      {rendered.rows.map((row, ri) => (
         <View key={ri} style={styles.row}>
           {row.map((color, ci) => (
             <View
