@@ -104,6 +104,52 @@ function gridToRows(g: Grid): string[] {
   return g.map((row) => row.join(''));
 }
 
+// Bresenham-style line between two points, drawing thickness-2 disks at each
+// step so the resulting stroke survives the outline pass (interior survives
+// as body color, edge becomes outline). Use for tails, antennae, snake bodies.
+function thickLine(
+  g: Grid,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  ch: string,
+) {
+  const dx = Math.abs(x1 - x0);
+  const dy = Math.abs(y1 - y0);
+  const sx = x0 < x1 ? 1 : -1;
+  const sy = y0 < y1 ? 1 : -1;
+  let err = dx - dy;
+  let x = x0;
+  let y = y0;
+  for (;;) {
+    // 2x2 disk at this step
+    setPixel(g, x, y, ch);
+    setPixel(g, x + 1, y, ch);
+    setPixel(g, x, y + 1, ch);
+    setPixel(g, x + 1, y + 1, ch);
+    if (x === x1 && y === y1) break;
+    const e2 = 2 * err;
+    if (e2 > -dy) {
+      err -= dy;
+      x += sx;
+    }
+    if (e2 < dx) {
+      err += dx;
+      y += sy;
+    }
+  }
+}
+
+// Draws a thick polyline that connects a sequence of waypoints.
+function polyline(g: Grid, pts: Array<[number, number]>, ch: string) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    thickLine(g, x0, y0, x1, y1, ch);
+  }
+}
+
 // ── Composers ────────────────────────────────────────────────────────
 
 export interface AnimalOptions {
@@ -194,39 +240,28 @@ export function generateCat(opts: AnimalOptions = {}): string[] {
   ellipse(g, 12, 29, 2, 1, '1');
   ellipse(g, 20, 29, 2, 1, '1');
 
-  // Tail — long curved tail along the right side
+  // Tail — continuous thick curve, sweeps up the right side of the body
   if ((opts.tail ?? 'curled') === 'curled') {
-    // Curved tail: starts at body lower right, sweeps up to upper right
-    const tailPoints: Array<[number, number]> = [
-      [25, 24],
+    polyline(g, [
+      [24, 24],
       [26, 22],
-      [27, 20],
-      [28, 18],
-      [28, 15],
-      [27, 13],
-    ];
-    for (const [x, y] of tailPoints) {
-      ellipse(g, x, y, 1, 1, '1');
-    }
+      [27, 19],
+      [27, 16],
+      [26, 14],
+    ], '1');
   } else if (opts.tail === 'fluffy') {
-    ellipse(g, 26, 22, 3, 4, '1');
+    ellipse(g, 26, 22, 3, 5, '1');
+    ellipse(g, 28, 19, 2, 3, '1');
   } else if (opts.tail === 'long') {
-    for (let i = 0; i < 10; i++) {
-      setPixel(g, 25 + Math.floor(i * 0.3), 24 - i, '1');
-    }
+    polyline(g, [[24, 24], [26, 21], [27, 17], [27, 13]], '1');
   }
 
-  // Rim shadow on body edges for depth
-  drawBodyShadow(g);
-
-  // Add mane on top of head if specified (lion, tiger has stripes instead)
+  // Mane drawn BEFORE finish so it participates in outline + highlight.
   if (opts.mane) {
     drawMane(g);
   }
 
-  // Chest highlight (lighter)
-  rect(g, 14, 20, 4, 3, '3');
-
+  finish(g);
   return gridToRows(g);
 }
 
@@ -301,8 +336,7 @@ export function generateDog(opts: AnimalOptions = {}): string[] {
     }
   }
 
-  drawBodyShadow(g);
-  rect(g, 14, 20, 4, 3, '3');
+  finish(g);
 
   return gridToRows(g);
 }
@@ -356,8 +390,7 @@ export function generateWolf(opts: AnimalOptions = {}): string[] {
   }
   ellipse(g, 28, 17, 2, 2, '1');
 
-  drawBodyShadow(g);
-  rect(g, 14, 19, 4, 3, '3');
+  finish(g);
 
   return gridToRows(g);
 }
@@ -393,12 +426,11 @@ export function generateBird(opts: AnimalOptions = {}): string[] {
   setPixel(g, 18, 30, '6');
   setPixel(g, 19, 30, '6');
 
-  // Tail feathers
-  for (let i = 0; i < 5; i++) {
-    setPixel(g, 8 - i, 21 + Math.floor(i / 2), '1');
-  }
+  // Tail feathers — a small wedge extending back-left from the body
+  polyline(g, [[8, 20], [5, 22], [3, 23]], '1');
+  polyline(g, [[8, 22], [5, 24], [3, 25]], '1');
 
-  drawBodyShadow(g);
+  finish(g);
 
   return gridToRows(g);
 }
@@ -451,59 +483,82 @@ export function generateOwl(): string[] {
   setPixel(g, 18, 30, '6');
   setPixel(g, 19, 30, '6');
 
-  drawBodyShadow(g);
+  finish(g);
 
   return gridToRows(g);
 }
 
 // ── Shared helpers ─────────────────────────────────────────────────────
 
-function drawBodyShadow(g: Grid) {
-  // Add a 1-pixel dark rim on the outer edge of any "1" pixel where the
-  // neighbor is transparent. Cheap "outline" pass that makes the silhouette
-  // pop against the dark UI.
-  const snapshot = g.map((r) => r.slice());
+// Outline pass: any body-silhouette pixel (palette 1 or 8 — body or accent
+// like mane / wing) whose 4-neighborhood contains transparency becomes the
+// outline color (palette 2). Produces a clean 1-pixel ring around the
+// whole silhouette — the single biggest "feels finished" trick.
+function drawOutline(g: Grid) {
+  const snap = g.map((r) => r.slice());
+  const isBody = (ch: string) => ch === '1' || ch === '8';
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
-      if (snapshot[y][x] !== '1') continue;
-      const neighbors = [
-        [x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1],
-      ];
-      for (const [nx, ny] of neighbors) {
-        if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID) continue;
-        if (snapshot[ny][nx] === '.') {
-          // Draw shadow ONE cell IN from the edge (so silhouette stays
-          // crisp; the inner side gets the shadow).
-          continue;
-        }
+      if (!isBody(snap[y][x])) continue;
+      const left = x > 0 ? snap[y][x - 1] : '.';
+      const right = x < GRID - 1 ? snap[y][x + 1] : '.';
+      const up = y > 0 ? snap[y - 1][x] : '.';
+      const down = y < GRID - 1 ? snap[y + 1][x] : '.';
+      if (left === '.' || right === '.' || up === '.' || down === '.') {
+        g[y][x] = '2';
       }
     }
   }
+}
 
-  // Simpler shadow: darken the underside of the head + body. Add a thin
-  // dark stripe at the bottom of the body.
-  for (let x = 8; x < 24; x++) {
-    if (g[27][x] === '1') g[27][x] = '2';
-  }
-  // Shadow on left edge of body (light coming from upper right)
-  for (let y = 16; y < 26; y++) {
-    if (g[y][6] === '1') g[y][6] = '2';
-    if (g[y][7] === '1') g[y][7] = '2';
+// Highlight pass: the topmost remaining body pixel (palette 1) in each
+// column becomes highlight (palette 3). Suggests light coming from above
+// and gives the silhouette depth.
+function drawTopHighlight(g: Grid) {
+  for (let x = 0; x < GRID; x++) {
+    for (let y = 0; y < GRID; y++) {
+      if (g[y][x] === '1') {
+        g[y][x] = '3';
+        break;
+      }
+    }
   }
 }
 
+// Standard finish pipeline: outline first, then highlight the topmost
+// interior pixel per column. Called at the end of every animal composer.
+function finish(g: Grid) {
+  drawOutline(g);
+  drawTopHighlight(g);
+}
+
 function drawMane(g: Grid) {
-  // Wreath of mane (palette 8) around the head.
-  const positions: Array<[number, number]> = [
-    [8, 8], [8, 11], [8, 14], [9, 6], [10, 4],
-    [13, 3], [16, 2], [19, 3], [22, 4], [23, 6],
-    [24, 8], [24, 11], [24, 14],
-    [9, 16], [11, 18], [13, 18], [16, 18], [19, 18], [21, 18], [23, 16],
-  ];
-  for (const [x, y] of positions) {
-    setPixel(g, x, y, '8');
+  // Thick fluffy ring around the head — drawn as the AREA between two
+  // concentric ellipses, then trimmed back so it only covers space that's
+  // currently transparent or already mane.
+  const cx = 16;
+  const cy = 12;
+  const outerRx = 11;
+  const outerRy = 10;
+  const innerRx = 7;
+  const innerRy = 6;
+  for (let y = Math.max(0, cy - outerRy); y <= Math.min(GRID - 1, cy + outerRy); y++) {
+    for (let x = Math.max(0, cx - outerRx); x <= Math.min(GRID - 1, cx + outerRx); x++) {
+      const odx = (x - cx) / outerRx;
+      const ody = (y - cy) / outerRy;
+      const idx = (x - cx) / innerRx;
+      const idy = (y - cy) / innerRy;
+      const inOuter = odx * odx + ody * ody <= 1;
+      const inInner = idx * idx + idy * idy <= 1;
+      if (inOuter && !inInner) {
+        // Only place mane where it wouldn't overwrite head body or features
+        const cur = g[y][x];
+        if (cur === '.' || cur === '1') g[y][x] = '8';
+      }
+    }
   }
-  // Fluff out edges
-  ellipse(g, 8, 11, 1, 4, '8');
-  ellipse(g, 24, 11, 1, 4, '8');
+  // Fluff tufts at the top
+  setPixel(g, 11, 1, '8');
+  setPixel(g, 16, 0, '8');
+  setPixel(g, 21, 1, '8');
 }
