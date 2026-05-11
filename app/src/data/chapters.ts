@@ -40,6 +40,18 @@ export const CHAPTERS: Record<number, ChapterIntro> = {
     ],
     accent: '#FF7849', // dusk orange-red — first hint of edge
   },
+  3: {
+    number: 3,
+    title: 'The Park',
+    subtitle: 'Chapter Three',
+    lines: [
+      'Past the alley, the world opens.',
+      'Trees. Benches. Things that fly.',
+      'They watch from the branches.',
+      "Pigeons don't bow to anyone. Owls bow to less.",
+    ],
+    accent: '#7BCBFF', // sky blue — open air
+  },
 };
 
 // First-stage-of-chapter lookup, used to route from the intro back into the

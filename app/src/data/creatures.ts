@@ -170,6 +170,44 @@ export const CREATURES: CreatureDefinition[] = [
     flavor: 'A wildcat from the forest edges. Sometimes seen on porches.',
   },
 
+  // ── Chapter 3: The Park (birds) ─────────────────────────────────
+  {
+    id: 'pigeon',
+    name: 'Pigeon',
+    type: 'swift',
+    rarity: 'common',
+    baseStats: { hp: 45, atk: 40, def: 30, spAtk: 45, spDef: 35, spd: 75 },
+    abilities: ['nip', 'dash'],
+    flavor: 'A grey city pigeon. Bold for its size. Owns a bench.',
+  },
+  {
+    id: 'crow',
+    name: 'Crow',
+    type: 'cunning',
+    rarity: 'uncommon',
+    baseStats: { hp: 60, atk: 55, def: 45, spAtk: 65, spDef: 45, spd: 60 },
+    abilities: ['scratch', 'feint'],
+    flavor: 'A glossy black crow. Watches. Remembers faces.',
+  },
+  {
+    id: 'hawk',
+    name: 'Hawk',
+    type: 'predator',
+    rarity: 'rare',
+    baseStats: { hp: 70, atk: 90, def: 50, spAtk: 60, spDef: 55, spd: 80 },
+    abilities: ['fang_strike', 'maul'],
+    flavor: 'A red-tailed hawk. Circles the playground at noon.',
+  },
+  {
+    id: 'owl',
+    name: 'Owl',
+    type: 'wild',
+    rarity: 'legendary',
+    baseStats: { hp: 105, atk: 85, def: 80, spAtk: 95, spDef: 80, spd: 70 },
+    abilities: ['scratch', 'feral_lunge'],
+    flavor: 'A great horned owl. The park is hers, especially after dark.',
+  },
+
   // ── Legendaries (BST ~485) ───────────────────────────────────────
   {
     id: 'lion',

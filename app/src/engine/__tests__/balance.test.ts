@@ -65,6 +65,31 @@ const SCENARIOS: Scenario[] = [
       slot(ownedAt('pup', s.enemyLevel + 2, 4), 'back', 5),
     ],
   },
+  {
+    name: 'late-game',
+    // Mid-rarity team a late-game player would realistically have:
+    // 2 rares (recruited from c2 enemies) + 3 commons. Tactically built
+    // for the chapter boss matchup.
+    team: (s) => {
+      if (s.chapter === 3 && s.index === 5) {
+        // vs Night Court (owl wild, hawk predator, crow cunning, pigeon swift)
+        return [
+          slot(ownedAt('husky', s.enemyLevel + 2, 0), 'front', 1),    // rare wild
+          slot(ownedAt('pugling', s.enemyLevel + 2, 1), 'front', 2),  // tough vs wild
+          slot(ownedAt('pup', s.enemyLevel + 2, 2), 'front', 3),      // social vs cunning
+          slot(ownedAt('doberman', s.enemyLevel + 2, 3), 'back', 4),  // rare predator vs swift
+          slot(ownedAt('mutt', s.enemyLevel + 2, 4), 'back', 5),
+        ];
+      }
+      return [
+        slot(ownedAt('bengal', s.enemyLevel + 2, 0), 'front', 1),
+        slot(ownedAt('sphynx', s.enemyLevel + 2, 1), 'front', 2),
+        slot(ownedAt('pugling', s.enemyLevel + 2, 2), 'front', 3),
+        slot(ownedAt('mutt', s.enemyLevel + 2, 3), 'back', 4),
+        slot(ownedAt('pup', s.enemyLevel + 2, 4), 'back', 5),
+      ];
+    },
+  },
 ];
 
 describe('balance — stage win rates', () => {
@@ -73,8 +98,8 @@ describe('balance — stage win rates', () => {
     const lines: string[] = [];
     lines.push('');
     lines.push('--- Stage win rates by player progression ---');
-    lines.push('stage             | starter | recruited | veteran | champion');
-    lines.push('------------------|---------|-----------|---------|---------');
+    lines.push('stage             | starter | recruited | veteran | champion | late-game');
+    lines.push('------------------|---------|-----------|---------|----------|---------');
 
     for (const stage of STAGES) {
       const enemySlots = buildEnemyTeam(stage);
@@ -90,9 +115,9 @@ describe('balance — stage win rates', () => {
         }
         cells.push(`${((wins / TRIALS) * 100).toFixed(0).padStart(3)}%`);
       }
-      const [a, b, c, d] = cells;
+      const [a, b, c, d, e] = cells;
       lines.push(
-        `${stage.id.padEnd(17)} |    ${a} |      ${b} |    ${c} |     ${d}`,
+        `${stage.id.padEnd(17)} |    ${a} |      ${b} |    ${c} |     ${d} |    ${e}`,
       );
     }
 

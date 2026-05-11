@@ -301,6 +301,25 @@ export const SPRITES: Record<string, PixelSpriteData> = {
     palette: pal('#A88555', '#5C3F22', '#D8AC78', '#9CD96A', '#1B1B1B', '#3A1F12', '#7A2C1F', '#3A2008'),
   },
 
+  // Chapter 3: The Park — birds. Reuses cat template (small birds) and
+  // wolf template (large bird) — palette differences carry the species feel.
+  pigeon: {
+    template: 'catSlim',
+    palette: pal('#8E96A8', '#3E4658', '#C0C6D4', '#FF7849', '#1B1B1B', '#FFB347', '#7A2C1F', '#2E3340'),
+  },
+  crow: {
+    template: 'catSlim',
+    palette: pal('#1A1A20', '#0A0A0E', '#3A3A48', '#FFD93D', '#FFFFFF', '#2E2E36', '#7A2C1F', '#0E0E12'),
+  },
+  hawk: {
+    template: 'cat',
+    palette: pal('#7A4A28', '#3A2008', '#C48A55', '#FFD93D', '#1B1B1B', '#FFB347', '#7A2C1F', '#3A2008'),
+  },
+  owl: {
+    template: 'wolf',
+    palette: pal('#6A5A40', '#2E2818', '#A89070', '#FFD93D', '#1B1B1B', '#FFB347', '#7A2C1F', '#3A2818'),
+  },
+
   // Legendary
   lion: {
     template: 'bigCat',

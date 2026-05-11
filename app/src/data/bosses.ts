@@ -36,6 +36,14 @@ export const BOSSES: Record<string, BossPersona> = {
       "King Bramble lowers himself, slow and deliberate. \"You walk back through the picket fences clean. Tell them the strays let you through. Once.\"",
     portraitSlot: 0,
   },
+  c3s5: {
+    name: 'The Night Court',
+    taunt:
+      "The owl tilts her head, slow as moonrise. \"Loud. Brave. Small. The park does not belong to the loud, the brave, or the small.\"",
+    victoryLine:
+      "The owl flares her wings once, then settles. \"Take the trees, then. We'll keep the dark.\"",
+    portraitSlot: 0,
+  },
 };
 
 export function getBoss(stageId: string): BossPersona | null {

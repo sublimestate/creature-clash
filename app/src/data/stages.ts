@@ -110,6 +110,59 @@ export const STAGES: StageDefinition[] = [
     goldReward: 380,
     xpReward: 560,
   },
+
+  // ── Chapter 3: The Park ──────────────────────────────────────────
+  // Introduces birds. The neighborhood's quiet — the park is not.
+  {
+    id: 'c3s1',
+    name: 'Bench Squabble',
+    chapter: 3,
+    index: 1,
+    enemyLevel: 11,
+    enemies: ['pigeon', 'pigeon'],
+    goldReward: 200,
+    xpReward: 280,
+  },
+  {
+    id: 'c3s2',
+    name: 'The Murder Watches',
+    chapter: 3,
+    index: 2,
+    enemyLevel: 12,
+    enemies: ['crow', 'pigeon', 'crow'],
+    goldReward: 240,
+    xpReward: 320,
+  },
+  {
+    id: 'c3s3',
+    name: 'Picnic Interrupted',
+    chapter: 3,
+    index: 3,
+    enemyLevel: 13,
+    enemies: ['crow', 'crow', 'sphynx'],
+    goldReward: 280,
+    xpReward: 360,
+  },
+  {
+    id: 'c3s4',
+    name: 'Talons in the Trees',
+    chapter: 3,
+    index: 4,
+    enemyLevel: 14,
+    enemies: ['hawk', 'crow', 'pigeon'],
+    goldReward: 320,
+    xpReward: 420,
+  },
+  {
+    id: 'c3s5',
+    name: 'Night Court — Boss',
+    chapter: 3,
+    index: 5,
+    enemyLevel: 14,
+    enemies: ['owl', 'hawk', 'crow', 'pigeon'],
+    goldReward: 520,
+    xpReward: 780,
+  },
 ];
 
 export const STAGES_BY_ID: Record<string, StageDefinition> = Object.fromEntries(

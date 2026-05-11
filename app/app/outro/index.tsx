@@ -12,13 +12,13 @@ import { COLORS } from '../../src/theme';
 const LINE_DELAY_MS = 800;
 const LINE_FADE_MS = 700;
 
-// Shown once after defeating King Bramble (c2s5). The player will not
-// see this again unless they reset.
+// Shown once after defeating the final boss. The player will not see
+// this again unless they reset.
 const LINES = [
-  'King Bramble dips his head as you pass.',
-  'The picket fences shut behind you.',
-  'For tonight, the block is quiet.',
-  'But the rooftops have been watching.',
+  'The owl folds her wings. The park goes quiet.',
+  'You walk home with a pack that wasn\'t yours a season ago.',
+  'Three neighborhoods. Three understandings.',
+  'Somewhere past the park there\'s a riverbed. The strays talk about it sometimes.',
 ];
 
 export default function OutroScreen() {
@@ -37,8 +37,8 @@ export default function OutroScreen() {
       <View style={[styles.accentBar, { backgroundColor: COLORS.accent }]} />
 
       <View style={styles.content}>
-        <Text style={styles.eyebrow}>CHAPTER 2 — CLEARED</Text>
-        <Text style={styles.title}>You claimed the block.</Text>
+        <Text style={styles.eyebrow}>CHAPTER 3 — CLEARED</Text>
+        <Text style={styles.title}>The park is yours.</Text>
         <View style={styles.divider} />
 
         <View style={styles.lines}>
