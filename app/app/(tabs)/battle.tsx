@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { playSfx } from '../../src/audio/SoundManager';
 import { CurrencyHeader } from '../../src/components/common/CurrencyHeader';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
 import { CHAPTERS } from '../../src/data/chapters';
@@ -20,6 +21,7 @@ export default function BattleTab() {
   const handleStageTap = (stageId: string) => {
     const stage = STAGES.find((s) => s.id === stageId);
     if (!stage) return;
+    playSfx('tap');
     if (stage.index === 1 && !seenIntros[stage.chapter]) {
       router.push({
         pathname: '/intro/[chapter]',

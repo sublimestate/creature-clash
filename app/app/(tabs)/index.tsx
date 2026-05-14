@@ -1,10 +1,13 @@
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { playSfx } from '../../src/audio/SoundManager';
+import { useAuthStore } from '../../src/cloud/authStore';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
 import { CurrencyHeader } from '../../src/components/common/CurrencyHeader';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
 import { STAGES } from '../../src/data/stages';
+import { useAudioStore } from '../../src/stores/audioStore';
 import { usePlayerStore } from '../../src/stores/playerStore';
 import { COLORS } from '../../src/theme';
 
@@ -15,6 +18,11 @@ export default function HomeScreen() {
   const team = usePlayerStore((s) => s.team);
   const resetAll = usePlayerStore((s) => s.resetAll);
   const teamFilled = team.filter((t) => t.instanceId).length;
+  const sfxMuted = useAudioStore((s) => s.sfxMuted);
+  const toggleSfxMuted = useAudioStore((s) => s.toggleSfxMuted);
+  const cloudConfigured = useAuthStore((s) => s.configured);
+  const authStatus = useAuthStore((s) => s.status);
+  const authEmail = useAuthStore((s) => s.email);
   const [resetArmed, setResetArmed] = useState(false);
 
   // Two-step confirmation: first tap arms, second tap resets. Auto-disarms
@@ -44,7 +52,21 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>Welcome,</Text>
           <Text style={styles.name}>{displayName}</Text>
         </View>
-        <CurrencyHeader />
+        <View style={styles.headerRight}>
+          <Pressable
+            onPress={() => {
+              // Tap SFX before mute so the toggle is audible until the moment
+              // it disables itself. After unmuting, the tap also confirms.
+              playSfx('tap');
+              toggleSfxMuted();
+            }}
+            style={styles.muteButton}
+            accessibilityLabel={sfxMuted ? 'Unmute sound effects' : 'Mute sound effects'}
+          >
+            <Text style={styles.muteIcon}>{sfxMuted ? '🔇' : '🔊'}</Text>
+          </Pressable>
+          <CurrencyHeader />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -68,7 +90,10 @@ export default function HomeScreen() {
         </View>
 
         <Pressable
-          onPress={() => router.push('/battle')}
+          onPress={() => {
+            playSfx('tap');
+            router.push('/battle');
+          }}
           style={({ pressed }) => [
             styles.bigButton,
             { opacity: pressed ? 0.85 : 1 },
@@ -85,7 +110,10 @@ export default function HomeScreen() {
         </Pressable>
 
         <Pressable
-          onPress={() => router.push('/creatures')}
+          onPress={() => {
+            playSfx('tap');
+            router.push('/creatures');
+          }}
           style={({ pressed }) => [
             styles.secondaryButton,
             { opacity: pressed ? 0.85 : 1 },
@@ -100,6 +128,25 @@ export default function HomeScreen() {
           <Text style={styles.tip}>• Cunning outwits Predator. Social outnumbers Predator.</Text>
           <Text style={styles.tip}>• Swift dodges Tough. Wild breaks Swift formations.</Text>
         </View>
+
+        <Pressable
+          onPress={() => {
+            playSfx('tap');
+            router.push('/auth/sign-in');
+          }}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { opacity: pressed ? 0.85 : 1 },
+          ]}
+        >
+          <Text style={styles.secondaryLabel}>
+            {!cloudConfigured
+              ? 'Cloud Save'
+              : authStatus === 'signed_in'
+                ? `Cloud Save — ${authEmail ?? 'signed in'}`
+                : 'Sign in to back up'}
+          </Text>
+        </Pressable>
 
         <Pressable
           onPress={handleResetTap}
@@ -159,6 +206,18 @@ const styles = StyleSheet.create({
   },
   greeting: { color: COLORS.textDim, fontSize: 12 },
   name: { color: COLORS.text, fontSize: 20, fontWeight: '900' },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  muteButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: COLORS.panel,
+    borderColor: COLORS.border,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  muteIcon: { fontSize: 16 },
   scroll: { padding: 16, paddingBottom: 60, gap: 14 },
   showcaseCard: {
     alignItems: 'center',

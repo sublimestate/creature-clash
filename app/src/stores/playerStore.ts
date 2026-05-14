@@ -23,6 +23,10 @@ interface PlayerState {
   hasSelectedStarter: boolean;
   hasSeenOutro: boolean;
   metCreatures: Record<string, { firstSeenStageId: string }>;
+  // Client-supplied last-write-wins timestamp for cloud sync. The sync layer
+  // bumps this whenever any syncable field changes; never set it from a
+  // setter directly.
+  localUpdatedAt: number;
   setName: (name: string) => void;
   addGold: (n: number) => void;
   addGems: (n: number) => void;
@@ -39,6 +43,37 @@ interface PlayerState {
   setNickname: (instanceId: string, nickname: string) => void;
   markCreaturesMet: (creatureIds: string[], stageId: string) => void;
   resetAll: () => void;
+  // Replace all syncable state from a cloud pull. Used only by the cloud
+  // sync layer; UI code should not call this.
+  applyCloudSnapshot: (snap: SyncableSnapshot, updatedAt: number) => void;
+}
+
+export interface SyncableSnapshot {
+  displayName: string;
+  gold: number;
+  gems: number;
+  ownedCreatures: OwnedCreature[];
+  team: TeamSlotState[];
+  completedStages: Record<string, { stars: number }>;
+  seenChapterIntros: Record<number, boolean>;
+  hasSelectedStarter: boolean;
+  hasSeenOutro: boolean;
+  metCreatures: Record<string, { firstSeenStageId: string }>;
+}
+
+export function buildSyncableSnapshot(s: PlayerState): SyncableSnapshot {
+  return {
+    displayName: s.displayName,
+    gold: s.gold,
+    gems: s.gems,
+    ownedCreatures: s.ownedCreatures,
+    team: s.team,
+    completedStages: s.completedStages,
+    seenChapterIntros: s.seenChapterIntros,
+    hasSelectedStarter: s.hasSelectedStarter,
+    hasSeenOutro: s.hasSeenOutro,
+    metCreatures: s.metCreatures,
+  };
 }
 
 const DEFAULT_TEAM: TeamSlotState[] = [
@@ -70,6 +105,7 @@ export const usePlayerStore = create<PlayerState>()(
       hasSelectedStarter: false,
       hasSeenOutro: false,
       metCreatures: {},
+      localUpdatedAt: 0,
 
       setName: (name) => set({ displayName: name }),
       addGold: (n) => set((s) => ({ gold: s.gold + n })),
@@ -227,7 +263,13 @@ export const usePlayerStore = create<PlayerState>()(
           hasSelectedStarter: false,
           hasSeenOutro: false,
           metCreatures: {},
+          // Bump explicitly so a wipe pushes to the cloud as the new latest.
+          localUpdatedAt: Date.now(),
         });
+      },
+
+      applyCloudSnapshot: (snap, updatedAt) => {
+        set({ ...snap, localUpdatedAt: updatedAt });
       },
     }),
     {
@@ -248,6 +290,7 @@ export const usePlayerStore = create<PlayerState>()(
         hasSelectedStarter: false,
         hasSeenOutro: false,
         metCreatures: {},
+        localUpdatedAt: 0,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {

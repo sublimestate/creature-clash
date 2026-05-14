@@ -22,6 +22,7 @@ import { usePlayerStore, buildTeamSlots } from '../../src/stores/playerStore';
 import { OwnedCreature } from '../../src/types';
 import { COLORS } from '../../src/theme';
 import { BattleEvent } from '../../src/types';
+import { playSfx } from '../../src/audio/SoundManager';
 
 const SPEEDS: Array<{ label: string; ms: number }> = [
   { label: '1×', ms: 800 },
@@ -121,6 +122,16 @@ export default function BattleScreen() {
   function applyEvent(event: BattleEvent) {
     tickRef.current += 1;
     const tick = tickRef.current;
+
+    if (event.kind === 'attack') {
+      playSfx(event.dodged ? 'dodge' : 'hit');
+    } else if (event.kind === 'faint') {
+      playSfx('faint');
+    } else if (event.kind === 'battle_end') {
+      // The result's winner field is the source of truth; the message can be
+      // either side's perspective.
+      playSfx(battleData?.result.winner === 'player' ? 'victory' : 'defeat');
+    }
 
     setUnits((prev) =>
       prev.map((u) => {
@@ -223,6 +234,15 @@ export default function BattleScreen() {
         const recruitLevel = Math.max(1, Math.floor(stage.enemyLevel / 2));
         const added = addCreature(recruitRoll.creatureId, recruitLevel);
         setRecruit(added);
+      }
+
+      // Stagger level-up + recruit stings so they don't pile on top of the
+      // victory fanfare or each other.
+      if (leveled.length > 0) {
+        setTimeout(() => playSfx('level_up'), 700);
+      }
+      if (recruitRoll) {
+        setTimeout(() => playSfx('recruit'), 1500);
       }
     }
   }, [
@@ -362,6 +382,7 @@ export default function BattleScreen() {
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
             <Pressable
               onPress={() => {
+                playSfx('tap');
                 // After beating the final stage for the first time, route
                 // to the outro instead of back to the campaign list.
                 const finalId = STAGES[STAGES.length - 1].id;
@@ -381,7 +402,10 @@ export default function BattleScreen() {
               <Text style={styles.buttonText}>Continue</Text>
             </Pressable>
             <Pressable
-              onPress={() => router.replace(`/preview/${stage.id}`)}
+              onPress={() => {
+                playSfx('tap');
+                router.replace(`/preview/${stage.id}`);
+              }}
               style={[styles.button, { backgroundColor: COLORS.panel }]}
             >
               <Text style={[styles.buttonText, { color: COLORS.text }]}>Retry</Text>

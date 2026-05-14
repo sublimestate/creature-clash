@@ -10,6 +10,12 @@ Repo: https://github.com/sublimestate/creature-clash (private)
 - **Framework**: React Native + Expo SDK 54, Expo Router (file-based routes),
   Reanimated 4, TypeScript
 - **State**: Zustand 4.x persisted via AsyncStorage (web → localStorage)
+- **Audio**: `expo-audio` (SDK 54's replacement for `expo-av`). Procedural
+  one-shot SFX live in `app/assets/audio/`; `SoundManager` preloads them at boot.
+- **Cloud**: `@supabase/supabase-js` v2. Magic-link auth + last-write-wins
+  save sync. Gated on `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`
+  — without those env vars the cloud layer no-ops and the app runs
+  offline-only.
 - **Tests**: Vitest (engine only — no RN runtime needed)
 - **Bundler**: Metro. `metro.config.js` disables `unstable_enablePackageExports`
   so packages with `import.meta.env` in their ESM build (Zustand, others) fall
@@ -56,6 +62,9 @@ app/
 │   ├── preview/[stageId].tsx     # pre-battle team-vs-team matchup + boss taunt
 │   ├── battle/[stageId].tsx      # active battle playback (animated)
 │   ├── outro/index.tsx           # plays once after the final boss
+│   ├── auth/
+│   │   ├── sign-in.tsx           # magic-link email entry + cloud-save status
+│   │   └── callback.tsx          # magic-link landing; bounces home post-auth
 │   └── +not-found.tsx
 ├── src/
 │   ├── engine/                   # PURE LOGIC — no UI imports
@@ -81,7 +90,18 @@ app/
 │   │   └── pixelSprites.ts       # TEMPLATES (32×32 generated + legacy 16×16) +
 │   │                             #   per-creature SPRITES (template + palette)
 │   ├── stores/
-│   │   └── playerStore.ts        # zustand persist, version 2, with migrate
+│   │   ├── playerStore.ts        # zustand persist, version 2, with migrate;
+│   │   │                         #   exports localUpdatedAt + buildSyncableSnapshot
+│   │   └── audioStore.ts         # persisted sfxMuted flag (device-local)
+│   ├── audio/
+│   │   ├── sounds.ts             # SfxId catalog + require()s for WAV assets
+│   │   └── SoundManager.ts       # singleton: preloads players, seekTo+play,
+│   │                             #   master volume / mute
+│   ├── cloud/
+│   │   ├── supabase.ts           # lazy createClient gated on EXPO_PUBLIC_*
+│   │   ├── authStore.ts          # zustand store: session, magic-link helpers
+│   │   └── sync.ts               # LWW sync: subscribe to playerStore, debounce
+│   │                             #   push; pull on sign-in once hydrated
 │   ├── components/
 │   │   ├── battle/               # BattleUnit, HealthBar, DamageNumber
 │   │   ├── creatures/            # CreatureCard, FieldJournal (encyclopedia)
@@ -89,10 +109,17 @@ app/
 │   │                             #   RarityBadge
 │   ├── types/index.ts            # shared types (CreatureType, BattleEvent, etc.)
 │   └── theme.ts                  # COLORS + RARITY_COLORS
+├── assets/audio/                 # synthesized CC0 SFX (tap, hit, dodge, faint,
+│                                 #   victory, defeat, level_up, recruit) ~140KB
 ├── app.json                      # web.output: "static" — DON'T set "single"
 ├── metro.config.js               # disables package-exports (see Stack notes)
 ├── vitest.config.ts
 └── package.json
+
+supabase/
+└── migrations/
+    └── 0001_init.sql             # saves table + RLS policies. Apply once in
+                                  #   Supabase SQL editor before enabling sync.
 ```
 
 ## Core design
@@ -152,7 +179,8 @@ creatures.
 
 Persisted fields beyond the obvious: `hasSelectedStarter` (gates onboarding
 redirect), `hasSeenOutro` (gates final-boss outro), `seenChapterIntros`
-(gates chapter intros), `metCreatures` (drives Field Journal silhouettes).
+(gates chapter intros), `metCreatures` (drives Field Journal silhouettes),
+`localUpdatedAt` (LWW clock for cloud sync; see below).
 
 Starter flow: new players are redirected to `/onboarding/select-starter`
 (picks 2 of 5 commons + sets trainer name + nicknames). After `selectStarters`,
@@ -160,6 +188,56 @@ they have 2 pets at level 3, 200 gold, 500 gems.
 
 `resetAll()` clears everything (including `hasSelectedStarter`) and is wired
 to the home-screen "Start New Game" button (two-tap confirm).
+
+### Audio
+
+`src/audio/SoundManager.ts` is a singleton that preloads one `AudioPlayer`
+per SFX at app boot (via `_layout.tsx`). `playSfx(id)` does `seekTo(0)` +
+`play()`, so rapid re-triggers restart the sample instead of stacking.
+Mute state lives in `audioStore` (separate from playerStore so it never
+syncs to the cloud — it's a device preference).
+
+SFX assets in `app/assets/audio/` are synthesized 22.05kHz 16-bit mono WAVs.
+They're placeholders — drop in higher-fidelity files with the same names
+and the manager picks them up unchanged.
+
+Wired event triggers:
+- Battle: `hit` / `dodge` per attack, `faint` on KO, `victory` / `defeat`
+  on `battle_end`, `level_up` (700ms stagger) and `recruit` (1500ms stagger)
+  in the rewards block.
+- UI: `tap` on Continue/Retry, FIGHT, stage tiles, home tab buttons,
+  mute toggle. Not on every Pressable in the app — keep it judicious.
+
+### Cloud sync (Supabase)
+
+Optional, gated on `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+Without them, `getSupabase()` returns null and the auth/sync layers no-op
+so the app still runs offline.
+
+**Schema**: a single `saves` table keyed by `user_id`, with `data` (jsonb
+holding the `SyncableSnapshot`), `version` (matches playerStore persist
+version), and `updated_at`. RLS limits each row to its owner. Apply
+`supabase/migrations/0001_init.sql` once in the Supabase SQL editor before
+enabling sync.
+
+**Auth**: email magic link only (`signInWithOtp` with `emailRedirectTo` set
+via `Linking.createURL('/auth/callback')`). The callback route relies on
+`detectSessionInUrl: true` to pick up the hash on web load. For native, the
+`scheme: "app"` in `app.json` produces `app://auth/callback`. Configure both
+in the Supabase project's Site URL / Redirect URLs.
+
+**Sync strategy**: last-write-wins by `localUpdatedAt`. The `sync.ts`
+subscriber computes a stable JSON of syncable fields on every store change;
+if it differs from the previous serialization, it stamps `localUpdatedAt =
+Date.now()` and schedules a debounced push (2.5s). On sign-in, it pulls
+once playerStore is hydrated (NOT before — otherwise AsyncStorage hydration
+clobbers the freshly-pulled snapshot) and compares timestamps. Cloud-newer
+replaces local via `applyCloudSnapshot`; local-newer-or-equal pushes.
+
+**Schema-version mismatch**: a cloud save from a different schema version
+is refused — local state is preserved and the next push will overwrite the
+cloud copy. Bump `SCHEMA_VERSION` in `sync.ts` whenever you bump the
+persisted playerStore version.
 
 ### Navigation flow
 
@@ -172,6 +250,8 @@ Preview "FIGHT"            → /battle/[stageId]
 Battle end (normal stage)  → "Continue" → /battle ; "Retry" → /preview
 Battle end (final boss,    → "Continue" → /outro (once), then /battle
   first clear)
+Home "Cloud Save" button   → /auth/sign-in (email magic link)
+Magic link click           → /auth/callback → home (signed in)
 ```
 
 Stage unlock: a stage is unlocked iff the previous one in `STAGES[]` order is
@@ -193,6 +273,11 @@ in `completedStages`.
   Field Journal encyclopedia with met-tracking + filter chips
 - **Sprites**: procedural 32×32 full-body sprites for every creature
   with outline + top-highlight finish pipeline
+- **Audio**: SFX scaffold via `expo-audio`. Placeholder synthesized SFX
+  for tap / hit / dodge / faint / level_up / recruit / victory / defeat,
+  wired into battle events and major UI taps. Mute toggle on home screen.
+- **Cloud save scaffold**: Supabase magic-link auth + LWW save sync.
+  Gated on env vars; no-op if unconfigured.
 - **Web**: clean static export; tested only on web
 - **Balance simulator**: `src/engine/__tests__/balance.test.ts` is
   informational, never fails. Simulates each stage 100× across player
@@ -200,8 +285,10 @@ in `completedStages`.
 
 ## Not yet done
 
-- Audio (SFX + BGM via `expo-av`) — biggest remaining feel gap
-- Supabase auth + cloud save
+- BGM (background music tracks per screen) — only one-shot SFX are wired
+- Higher-fidelity SFX (current files are synthesized placeholders)
+- End-to-end cloud-sync smoke test against a real Supabase project, plus
+  rotation-friendly env handling (project URL is currently a single env var)
 - Gacha system (intentionally deferred per user)
 - Higher-fidelity hand-drawn pixel art (the procedural sprites are a
   baseline; PNGs could drop in alongside via `<CreatureSprite>`)

@@ -1,10 +1,14 @@
 import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { setAudioModeAsync } from 'expo-audio';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import { soundManager } from '../src/audio/SoundManager';
+import { useAuthStore } from '../src/cloud/authStore';
+import { initCloudSync } from '../src/cloud/sync';
 import { COLORS } from '../src/theme';
 
 export {
@@ -20,6 +24,15 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
+    // iOS: don't go silent when the ring switch is on; mix with other audio.
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: 'mixWithOthers',
+    }).catch(() => {});
+    soundManager.init();
+    // Boot cloud-sync. No-ops when env vars aren't configured.
+    useAuthStore.getState().init().catch(() => {});
+    initCloudSync();
   }, []);
 
   const navTheme = {
