@@ -24,6 +24,8 @@ npm start                   # expo dev server
 npm run web -- --clear      # web (use --clear after route changes)
 npm run ios                 # iOS simulator (needs Xcode)
 npm test                    # vitest engine tests (~30 currently pass)
+npm run test:e2e            # playwright E2E (auto-starts expo web server)
+npm run test:e2e:headed     # same, with a visible browser
 npm run typecheck           # tsc --noEmit
 ```
 
@@ -34,6 +36,21 @@ not a real bug.
 
 To see `console.log` output from any test (sprite dumps, balance simulator),
 run `npx vitest run --reporter=verbose <path>`. Plain `npm test` swallows it.
+
+### E2E tests (Playwright)
+
+`app/e2e/` drives the real web app in headless Chromium: onboarding flow,
+a single stage win (rewards + unlock), and a full chapter 1 playthrough.
+`e2e/save.ts` builds a save in zustand-persist's localStorage format and
+injects it pre-load, so tests start from any game state — keep its
+`STORAGE_VERSION` in sync with `playerStore.ts` or seeded saves get wiped
+by `migrate()`. Battle outcomes seed from `Date.now()` and can't be pinned,
+so battle tests use an overleveled team (`STRONG_TEAM`, level 20 vs chapter 1)
+to make victory effectively certain. Locator gotchas encoded in the specs:
+`getByText` needs `exact: true` where the battle log echoes banner words,
+and expo-router keeps replaced screens mounted (hidden) in the DOM — use the
+`onScreen()` helper after any `router.replace()` navigation. On failure,
+inspect with `npx playwright show-trace test-results/<test>/trace.zip`.
 
 ## Project structure
 
@@ -89,8 +106,10 @@ app/
 │   │                             #   RarityBadge
 │   ├── types/index.ts            # shared types (CreatureType, BattleEvent, etc.)
 │   └── theme.ts                  # COLORS + RARITY_COLORS
+├── e2e/                          # Playwright browser tests + save-seeding helper
 ├── app.json                      # web.output: "static" — DON'T set "single"
 ├── metro.config.js               # disables package-exports (see Stack notes)
+├── playwright.config.ts          # auto-starts expo web server on :8081
 ├── vitest.config.ts
 └── package.json
 ```
