@@ -1,6 +1,12 @@
 import React, { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { PixelSpriteData, SPRITES, TEMPLATES } from '../../data/pixelSprites';
+import { PixelSpriteData, SPRITES } from '../../data/pixelSprites';
+
+// Palette index for a row char: '0'-'9' → 0-9, 'a'-'f' → 10-15.
+function charToIndex(ch: string): number {
+  const code = ch.charCodeAt(0);
+  return code <= 57 ? code - 48 : code - 87;
+}
 
 interface Props {
   creatureId: string;
@@ -18,13 +24,13 @@ export function PixelSprite({ creatureId, size, fainted, flip }: Props) {
   // Pre-compute the row arrays — character + palette color per cell.
   const rendered = useMemo(() => {
     if (!data) return null;
-    const tmpl = TEMPLATES[data.template];
+    const tmpl = data.template;
     const grid = tmpl.grid;
     const rows = tmpl.rows.map((row) =>
       Array.from(row).map((ch) => {
         if (ch === '.') return null;
-        const idx = ch.charCodeAt(0) - 48; // '0' = 48
-        return data.palette[idx] ?? null;
+        const color = data.palette[charToIndex(ch)];
+        return color && color !== 'transparent' ? color : null;
       }),
     );
     return { grid, rows };

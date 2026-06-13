@@ -152,19 +152,35 @@ Super-effective = 1.5×, weak = 0.67×.
 
 ### Pixel sprites
 
-`src/data/spriteGenerator.ts` is the main path: procedural drawing primitives
-(ellipse, rect, triangle, polyline, thickLine) compose 32×32 full-body
-sprites via per-animal composers (`generateCat`, `generateDog`, `generateWolf`,
-`generateBird`, `generateOwl`). Every composer ends with `finish(g)` which
-runs the **outline pass** (edge body pixels → palette 2) and **highlight
-pass** (topmost interior pixel per column → palette 3). That pipeline is
-what makes sprites read as polished — don't bypass it.
+`src/data/spriteGenerator.ts` sculpts each 32×32 sprite from a compact
+`AnimalSpec` (species/build/ears/tail/mane/pattern). The look comes from
+three layers, in order:
+1. **Shaded masses** — `shadeEllipse` fills the body/head and lights each
+   pixel from the upper-left by treating its position as a surface normal,
+   so masses read as volumes, not flat blobs. Don't fill bodies with a flat
+   ellipse; that's what made the old sprites look unrefined.
+2. **Markings** — `applyPattern` stamps species identity (tabby/tiger
+   stripes, spots, mask, patch, speckle) over body pixels only. This is what
+   distinguishes same-template creatures (tiger vs lion, bengal vs tabby);
+   colour swaps alone are not enough.
+3. **Outline** — `drawOutline` wraps the silhouette in a 1px darkest ring
+   placed in the transparent cells *outside* the body, so the body keeps its
+   full mass (crisper than eroding the edge inward).
 
-`src/data/pixelSprites.ts` wires generators into `TEMPLATES` and each
-creature picks a template + a 9-color palette. Templates declare their own
-`grid: 16 | 32` so legacy 16×16 templates remain renderable. The `tmpl()`
-helper validates row dimensions at module load; mistakes throw immediately.
-`<PixelSprite>` reads the per-template grid size and renders cells as Views.
+`src/data/pixelSprites.ts` holds one `build({...spec, body, eye, pattern…})`
+per creature. The palette ramp (mid/shadow/highlight/outline) is **derived**
+from a single `body` hex via `lighten`/`darken`, so creatures read by shape
+*and* colour. Palette is a 12-entry index array (legend at the top of both
+files); row chars are `.`=transparent, `0`-`9` and `a`-`f` for indices 0-15.
+`tmpl()` validates dimensions/charset at module load. Determinism holds —
+markings use a seeded `mulberry` PRNG, never `Math.random()`.
+
+`<PixelSprite>` reads `data.template` (a `{grid, rows}` object) directly and
+renders each cell as a View. **Preview while iterating:** `npm run
+sprites:preview -- /tmp/out.png` renders every creature into one labelled
+PNG montage (via `scripts/renderSprites.ts` + a hand-rolled PNG encoder in
+`scripts/png.ts`) — the only way to actually see sprite changes without
+launching the app.
 
 ### Audio
 
@@ -238,8 +254,9 @@ in `completedStages`.
 - **Reward loop**: post-victory level-up beats with HP/ATK deltas,
   recruitment rolls from defeated enemies (rarer = lower drop rate),
   Field Journal encyclopedia with met-tracking + filter chips
-- **Sprites**: procedural 32×32 full-body sprites for every creature
-  with outline + top-highlight finish pipeline
+- **Sprites**: procedural 32×32 full-body sprites for every creature —
+  directional form shading, derived colour ramps, species markings
+  (stripes/spots/masks/patches), and a 1px outline pass
 - **Audio**: procedurally synthesized SFX (15 named sounds) + chiptune BGM
   (theme/battle loops), mute toggle on home + battle headers (web only)
 - **Web**: clean static export; tested only on web

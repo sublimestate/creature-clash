@@ -1,67 +1,102 @@
-// Procedural pixel sprite generator. Builds 32×32 sprite rows by composing
-// primitive shapes (ellipses, rects, lines, triangles) onto a char grid.
-// Used to produce full-body animal sprites rather than the older 16×16
-// face avatars.
+// Procedural pixel sprite generator. Builds 32x32 sprites by sculpting a few
+// big masses (body, head) with a directional light model, then stamping
+// species features and markings on top. The output is a grid of palette-index
+// chars consumed by pixelSprites.ts.
+//
+// Palette index legend (chars in the emitted rows):
+//   .  transparent      6  nose
+//   1  body mid         7  mouth / tongue
+//   2  body shadow      8  pattern / marking
+//   3  body highlight   9  outline (darkest)
+//   4  eye iris         a  eye shine (catchlight)
+//   5  pupil            b  inner-ear / accent
 
 type Grid = string[][];
 
 const GRID = 32;
 
+// Char constants for readability.
+const T = '.';
+const MID = '1';
+const SHA = '2';
+const HI = '3';
+const IRIS = '4';
+const PUP = '5';
+const NOSE = '6';
+const MOUTH = '7';
+const PAT = '8';
+const OUT = '9';
+const SHINE = 'a';
+const INNER = 'b';
+
+const BODY_CHARS = new Set([MID, SHA, HI]);
+
+// Light direction (points toward the light, from upper-left).
+const LX = -0.55;
+const LY = -0.82;
+
 function makeGrid(): Grid {
-  return Array.from({ length: GRID }, () => Array(GRID).fill('.'));
+  return Array.from({ length: GRID }, () => Array(GRID).fill(T));
+}
+
+function inBounds(x: number, y: number): boolean {
+  return x >= 0 && y >= 0 && x < GRID && y < GRID;
 }
 
 function setPixel(g: Grid, x: number, y: number, ch: string) {
-  if (x < 0 || y < 0 || x >= GRID || y >= GRID) return;
+  if (!inBounds(x, y)) return;
   g[y][x] = ch;
 }
 
-// Filled ellipse using the standard pixel ellipse formula. Clip to grid.
-function ellipse(
-  g: Grid,
-  cx: number,
-  cy: number,
-  rx: number,
-  ry: number,
-  ch: string,
-) {
-  for (let y = Math.max(0, cy - ry); y <= Math.min(GRID - 1, cy + ry); y++) {
-    for (let x = Math.max(0, cx - rx); x <= Math.min(GRID - 1, cx + rx); x++) {
-      const dx = (x - cx) / rx;
-      const dy = (y - cy) / ry;
-      if (dx * dx + dy * dy <= 1) setPixel(g, x, y, ch);
+// Fill an ellipse with a flat char.
+function ellipse(g: Grid, cx: number, cy: number, rx: number, ry: number, ch: string) {
+  for (let y = Math.max(0, Math.floor(cy - ry)); y <= Math.min(GRID - 1, Math.ceil(cy + ry)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - rx)); x <= Math.min(GRID - 1, Math.ceil(cx + rx)); x++) {
+      const nx = (x - cx) / rx;
+      const ny = (y - cy) / ry;
+      if (nx * nx + ny * ny <= 1) setPixel(g, x, y, ch);
     }
   }
 }
 
-// Hollow ellipse (1-pixel ring).
-function ellipseRing(
+// Fill an ellipse, shading each pixel by treating its position as a surface
+// normal and lighting it from the upper-left. This is what gives the masses
+// volume instead of reading as flat blobs.
+function shadeEllipse(
   g: Grid,
   cx: number,
   cy: number,
   rx: number,
   ry: number,
-  ch: string,
+  opts: { hi?: number; sha?: number; bellyLight?: boolean } = {},
 ) {
-  for (let y = Math.max(0, cy - ry); y <= Math.min(GRID - 1, cy + ry); y++) {
-    for (let x = Math.max(0, cx - rx); x <= Math.min(GRID - 1, cx + rx); x++) {
-      const dx = (x - cx) / rx;
-      const dy = (y - cy) / ry;
-      const d2 = dx * dx + dy * dy;
-      if (d2 <= 1 && d2 >= 0.6) setPixel(g, x, y, ch);
+  const hiT = opts.hi ?? 0.5;
+  const shaT = opts.sha ?? -0.3;
+  for (let y = Math.max(0, Math.floor(cy - ry)); y <= Math.min(GRID - 1, Math.ceil(cy + ry)); y++) {
+    for (let x = Math.max(0, Math.floor(cx - rx)); x <= Math.min(GRID - 1, Math.ceil(cx + rx)); x++) {
+      const nx = (x - cx) / rx;
+      const ny = (y - cy) / ry;
+      const r2 = nx * nx + ny * ny;
+      if (r2 > 1) continue;
+      const d = nx * LX + ny * LY; // higher = more lit
+      let ch = MID;
+      if (d > hiT) ch = HI;
+      else if (d < shaT) ch = SHA;
+      // Core/contact shadow along the bottom rim.
+      if (ny > 0.6 && d < 0.15) ch = SHA;
+      // Optional lighter belly (lower-front catches bounce light).
+      if (opts.bellyLight && ny > 0.15 && Math.abs(nx) < 0.5 && d > -0.2 && d <= hiT) {
+        ch = HI;
+      }
+      setPixel(g, x, y, ch);
     }
   }
 }
 
 function rect(g: Grid, x: number, y: number, w: number, h: number, ch: string) {
-  for (let dy = 0; dy < h; dy++) {
-    for (let dx = 0; dx < w; dx++) {
-      setPixel(g, x + dx, y + dy, ch);
-    }
-  }
+  for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) setPixel(g, x + dx, y + dy, ch);
 }
 
-// Filled triangle by three corner points.
 function triangle(
   g: Grid,
   ax: number, ay: number,
@@ -75,9 +110,9 @@ function triangle(
   const maxY = Math.min(GRID - 1, Math.ceil(Math.max(ay, by, cy)));
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
-      const d1 = sign(x, y, ax, ay, bx, by);
-      const d2 = sign(x, y, bx, by, cx, cy);
-      const d3 = sign(x, y, cx, cy, ax, ay);
+      const d1 = edge(x, y, ax, ay, bx, by);
+      const d2 = edge(x, y, bx, by, cx, cy);
+      const d3 = edge(x, y, cx, cy, ax, ay);
       const hasNeg = d1 < 0 || d2 < 0 || d3 < 0;
       const hasPos = d1 > 0 || d2 > 0 || d3 > 0;
       if (!(hasNeg && hasPos)) setPixel(g, x, y, ch);
@@ -85,480 +120,436 @@ function triangle(
   }
 }
 
-function sign(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+function edge(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
   return (px - bx) * (ay - by) - (ax - bx) * (py - by);
 }
 
-// Mirror existing pixels across the vertical centerline (for symmetric features).
-function mirrorH(g: Grid) {
-  const mid = Math.floor(GRID / 2);
-  for (let y = 0; y < GRID; y++) {
-    for (let x = mid; x < GRID; x++) {
-      const mirrored = GRID - 1 - x;
-      if (g[y][mirrored] !== '.') g[y][x] = g[y][mirrored];
+// Thick tapering stroke through waypoints (tails, limbs). radius shrinks
+// toward the last point for a natural taper.
+function taperStroke(g: Grid, pts: Array<[number, number]>, r0: number, r1: number, ch: string) {
+  const segs = pts.length - 1;
+  for (let i = 0; i < segs; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const steps = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0)) * 2);
+    for (let s = 0; s <= steps; s++) {
+      const f = (i + s / steps) / segs;
+      const r = r0 + (r1 - r0) * f;
+      const x = x0 + ((x1 - x0) * s) / steps;
+      const y = y0 + ((y1 - y0) * s) / steps;
+      ellipse(g, Math.round(x), Math.round(y), Math.max(1, Math.round(r)), Math.max(1, Math.round(r)), ch);
     }
   }
+}
+
+// Deterministic tiny PRNG so pattern placement is stable per creature.
+function mulberry(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ── Features ───────────────────────────────────────────────────────────
+
+interface Eyes {
+  y: number;
+  dx: number; // half-distance between eye centres
+  slit?: boolean; // vertical cat pupil
+  big?: boolean; // owl
+}
+
+// Eyes are deliberately tiny — at 32px a couple of pixels read as a clean
+// beady eye, while anything larger turns into a hollow goggle.
+function drawEyes(g: Grid, cx: number, e: Eyes) {
+  for (const ex of [cx - e.dx, cx + e.dx]) {
+    const inner = ex < cx ? ex + 1 : ex - 1; // pupil leans toward the nose
+    const outer = ex < cx ? ex - 1 : ex + 1;
+    if (e.big) {
+      // Owl: a real iris ring with a dark pupil and a glint.
+      ellipse(g, ex, e.y, 2, 2, IRIS);
+      setPixel(g, ex, e.y, PUP);
+      setPixel(g, ex, e.y + 1, PUP);
+      setPixel(g, outer, e.y - 1, SHINE);
+    } else {
+      // 2x2 eye: iris block, one dark pupil, one white glint.
+      setPixel(g, ex, e.y, IRIS);
+      setPixel(g, ex, e.y + 1, IRIS);
+      setPixel(g, inner, e.y, IRIS);
+      setPixel(g, inner, e.y + 1, IRIS);
+      setPixel(g, inner, e.y + 1, PUP);
+      if (!e.slit) setPixel(g, ex, e.y + 1, PUP);
+      setPixel(g, outer, e.y, SHINE);
+    }
+  }
+}
+
+// ── Pattern pass ───────────────────────────────────────────────────────
+
+export type PatternKind =
+  | 'none'
+  | 'tabby'
+  | 'tiger'
+  | 'spots'
+  | 'mask'
+  | 'patch'
+  | 'speckle';
+
+// Only paints over existing body pixels so markings hug the silhouette.
+function isBody(g: Grid, x: number, y: number): boolean {
+  return inBounds(x, y) && BODY_CHARS.has(g[y][x]);
+}
+
+function paintBody(g: Grid, x: number, y: number, ch: string) {
+  if (isBody(g, x, y)) setPixel(g, x, y, ch);
+}
+
+function applyPattern(g: Grid, kind: PatternKind, seed: number) {
+  const rnd = mulberry(seed);
+  if (kind === 'tabby') {
+    // Forehead M + a few back stripes.
+    for (const x of [14, 16, 18]) {
+      setPixel(g, x, 6, PAT);
+      setPixel(g, x, 7, PAT);
+    }
+    for (let y = 18; y <= 26; y += 3) {
+      for (let x = 11; x <= 21; x++) if ((x + y) % 7 < 2) paintBody(g, x, y, PAT);
+    }
+  } else if (kind === 'tiger') {
+    // Short curved ticks across the upper flanks and back only — at 32px a few
+    // marks read as a tiger far better than full bars (which look like jail).
+    const bars: Array<[number, number, number]> = [
+      [11, 15, 18], [13, 14, 17], [19, 14, 17], [21, 15, 18], [16, 18, 20],
+    ];
+    for (const [x, y0, y1] of bars) {
+      for (let y = y0; y <= y1; y++) if (g[y]?.[x] !== HI) paintBody(g, x, y, PAT);
+    }
+    paintBody(g, 13, 8, PAT);
+    paintBody(g, 19, 8, PAT);
+  } else if (kind === 'spots') {
+    for (let i = 0; i < 16; i++) {
+      const x = 9 + Math.floor(rnd() * 14);
+      const y = 16 + Math.floor(rnd() * 12);
+      if (!isBody(g, x, y)) continue;
+      // small rosette
+      paintBody(g, x, y, PAT);
+      if (rnd() > 0.5) paintBody(g, x + 1, y, PAT);
+      if (rnd() > 0.5) paintBody(g, x, y + 1, PAT);
+    }
+  } else if (kind === 'mask') {
+    // Darker cap over the crown + around the eyes; light muzzle stays clear.
+    for (let x = 8; x <= 23; x++) {
+      for (let y = 3; y <= 9; y++) {
+        const nx = (x - 16) / 9;
+        const ny = (y - 7) / 5;
+        if (nx * nx + ny * ny <= 1) paintBody(g, x, y, PAT);
+      }
+    }
+    paintBody(g, 11, 11, PAT); paintBody(g, 21, 11, PAT);
+  } else if (kind === 'patch') {
+    // One big irregular patch over an ear/eye and a back blotch.
+    for (let x = 7; x <= 14; x++)
+      for (let y = 4; y <= 13; y++) {
+        const nx = (x - 10) / 4;
+        const ny = (y - 9) / 5;
+        if (nx * nx + ny * ny <= 1) paintBody(g, x, y, PAT);
+      }
+    for (let x = 17; x <= 26; x++)
+      for (let y = 18; y <= 27; y++) {
+        const nx = (x - 21) / 5;
+        const ny = (y - 22) / 5;
+        if (nx * nx + ny * ny <= 1 && rnd() > 0.25) paintBody(g, x, y, PAT);
+      }
+  } else if (kind === 'speckle') {
+    for (let i = 0; i < 22; i++) {
+      const x = 9 + Math.floor(rnd() * 14);
+      const y = 14 + Math.floor(rnd() * 14);
+      paintBody(g, x, y, PAT);
+    }
+  }
+}
+
+// ── Finish: outline ring + ground shadow ───────────────────────────────
+
+// Wrap the whole silhouette in a 1px outline placed in the transparent cells
+// just outside it, so the body keeps its full mass (crisper than eroding the
+// edge inward, and a true darkest tone instead of reusing the fur shadow).
+function drawOutline(g: Grid) {
+  const isFilled = (x: number, y: number) => inBounds(x, y) && g[y][x] !== T && g[y][x] !== OUT;
+  const ring: Array<[number, number]> = [];
+  for (let y = 0; y < GRID; y++) {
+    for (let x = 0; x < GRID; x++) {
+      if (g[y][x] !== T) continue;
+      if (
+        isFilled(x - 1, y) || isFilled(x + 1, y) || isFilled(x, y - 1) || isFilled(x, y + 1) ||
+        isFilled(x - 1, y - 1) || isFilled(x + 1, y - 1) || isFilled(x - 1, y + 1) || isFilled(x + 1, y + 1)
+      ) {
+        ring.push([x, y]);
+      }
+    }
+  }
+  for (const [x, y] of ring) g[y][x] = OUT;
 }
 
 function gridToRows(g: Grid): string[] {
   return g.map((row) => row.join(''));
 }
 
-// Bresenham-style line between two points, drawing thickness-2 disks at each
-// step so the resulting stroke survives the outline pass (interior survives
-// as body color, edge becomes outline). Use for tails, antennae, snake bodies.
-function thickLine(
-  g: Grid,
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  ch: string,
-) {
-  const dx = Math.abs(x1 - x0);
-  const dy = Math.abs(y1 - y0);
-  const sx = x0 < x1 ? 1 : -1;
-  const sy = y0 < y1 ? 1 : -1;
-  let err = dx - dy;
-  let x = x0;
-  let y = y0;
-  for (;;) {
-    // 2x2 disk at this step
-    setPixel(g, x, y, ch);
-    setPixel(g, x + 1, y, ch);
-    setPixel(g, x, y + 1, ch);
-    setPixel(g, x + 1, y + 1, ch);
-    if (x === x1 && y === y1) break;
-    const e2 = 2 * err;
-    if (e2 > -dy) {
-      err -= dy;
-      x += sx;
-    }
-    if (e2 < dx) {
-      err += dx;
-      y += sy;
-    }
-  }
-}
+// ── Composers ──────────────────────────────────────────────────────────
 
-// Draws a thick polyline that connects a sequence of waypoints.
-function polyline(g: Grid, pts: Array<[number, number]>, ch: string) {
-  for (let i = 0; i < pts.length - 1; i++) {
-    const [x0, y0] = pts[i];
-    const [x1, y1] = pts[i + 1];
-    thickLine(g, x0, y0, x1, y1, ch);
-  }
-}
-
-// ── Composers ────────────────────────────────────────────────────────
-
-export interface AnimalOptions {
-  // Ear shape variant for canines/felines.
-  ears?: 'pointy' | 'perked' | 'floppy' | 'tufted' | 'none';
-  // Body proportions.
+export interface AnimalSpec {
+  species: 'cat' | 'dog' | 'wolf' | 'bird' | 'owl';
   build?: 'normal' | 'stocky' | 'slender';
-  // Optional mane (lion/tiger).
-  mane?: boolean;
-  // Tail style.
+  ears?: 'pointy' | 'perked' | 'floppy' | 'tufted';
   tail?: 'curled' | 'long' | 'short' | 'fluffy' | 'none';
-  // Eye color override (palette index).
-  eyeColor?: number;
+  mane?: boolean;
+  pattern?: PatternKind;
+  seed?: number;
 }
 
-// Sitting feline. Cat-like body with vertical pupils.
-export function generateCat(opts: AnimalOptions = {}): string[] {
+export function buildAnimal(spec: AnimalSpec): string[] {
+  switch (spec.species) {
+    case 'cat':
+      return composeCat(spec);
+    case 'dog':
+      return composeDog(spec);
+    case 'wolf':
+      return composeWolf(spec);
+    case 'bird':
+      return composeBird(spec);
+    case 'owl':
+      return composeOwl(spec);
+  }
+}
+
+function composeCat(spec: AnimalSpec): string[] {
   const g = makeGrid();
-  const ears = opts.ears ?? 'pointy';
-  const build = opts.build ?? 'normal';
-
-  // Body — sitting cat. Bottom-rooted ellipse.
-  const bodyRx = build === 'stocky' ? 10 : build === 'slender' ? 7 : 9;
-  const bodyRy = 8;
-  const bodyCx = 16;
-  const bodyCy = 22;
-  ellipse(g, bodyCx, bodyCy, bodyRx, bodyRy, '1');
-
-  // Head — circle above the body
+  const build = spec.build ?? 'normal';
+  const bodyRx = build === 'stocky' ? 9 : build === 'slender' ? 7 : 8;
   const headRx = build === 'stocky' ? 8 : 7;
-  const headRy = build === 'stocky' ? 7 : 6;
-  const headCx = 16;
-  const headCy = 12;
-  ellipse(g, headCx, headCy, headRx, headRy, '1');
 
-  // Ears
-  if (ears === 'pointy') {
-    // Solid wedge ears — explicit pixels read better than tiny triangles.
-    // Left ear
-    rect(g, 8, 4, 2, 1, '1');   // tip
-    rect(g, 8, 5, 3, 1, '1');
-    rect(g, 8, 6, 4, 1, '1');
-    rect(g, 8, 7, 5, 1, '1');
-    rect(g, 8, 8, 5, 1, '1');
-    // inner shadow
-    setPixel(g, 9, 6, '2');
-    rect(g, 9, 7, 2, 1, '2');
-    rect(g, 9, 8, 3, 1, '2');
-    // Right ear (mirror across center x=15.5)
-    rect(g, 22, 4, 2, 1, '1');
-    rect(g, 21, 5, 3, 1, '1');
-    rect(g, 20, 6, 4, 1, '1');
-    rect(g, 19, 7, 5, 1, '1');
-    rect(g, 19, 8, 5, 1, '1');
-    setPixel(g, 22, 6, '2');
-    rect(g, 21, 7, 2, 1, '2');
-    rect(g, 20, 8, 3, 1, '2');
-  } else if (ears === 'tufted') {
-    // Owl-style ear tufts: small triangles up + out
-    triangle(g, 10, 9, 9, 3, 12, 8, '1');
-    triangle(g, 22, 9, 23, 3, 20, 8, '1');
-  } else if (ears === 'floppy') {
-    // Floppy ears hang down past the head sides
-    ellipse(g, 8, 14, 3, 5, '2');
-    ellipse(g, 24, 14, 3, 5, '2');
+  // Tail first (behind the body).
+  if ((spec.tail ?? 'curled') === 'fluffy') {
+    ellipse(g, 26, 21, 4, 6, MID);
+  } else if (spec.tail === 'long') {
+    taperStroke(g, [[23, 25], [27, 22], [28, 16], [27, 11]], 2, 1, MID);
+  } else {
+    taperStroke(g, [[23, 25], [27, 22], [28, 18], [26, 14]], 2, 1, MID);
   }
 
-  // Eyes — two darker round pupils with white sclera around
-  const eyeY = 12;
-  ellipse(g, 13, eyeY, 2, 2, '4'); // left sclera
-  ellipse(g, 19, eyeY, 2, 2, '4'); // right sclera
-  setPixel(g, 13, eyeY, '5');
-  setPixel(g, 14, eyeY, '5');
-  setPixel(g, 19, eyeY, '5');
-  setPixel(g, 18, eyeY, '5');
+  if (spec.mane) ellipse(g, 16, 13, 11, 10, MID); // mane base under head
 
-  // Nose (triangle / pixel)
-  setPixel(g, 16, 16, '6');
-  setPixel(g, 15, 15, '6');
-  setPixel(g, 17, 15, '6');
+  shadeEllipse(g, 16, 22, bodyRx, 8, { bellyLight: true });
+  shadeEllipse(g, 16, 12, headRx, 6);
 
-  // Mouth
-  setPixel(g, 15, 17, '7');
-  setPixel(g, 16, 17, '7');
-  setPixel(g, 17, 17, '7');
+  // Ears (filled triangles sitting on the head) with inner color.
+  triangle(g, 9, 7, 11, 1, 14, 7, MID);
+  triangle(g, 23, 7, 21, 1, 18, 7, MID);
+  triangle(g, 11, 6, 11, 3, 13, 6, INNER);
+  triangle(g, 21, 6, 21, 3, 19, 6, INNER);
+  setPixel(g, 11, 2, HI);
+  setPixel(g, 21, 2, HI);
 
-  // Front paws — two small ovals at the bottom of the body
-  ellipse(g, 12, 29, 2, 1, '1');
-  ellipse(g, 20, 29, 2, 1, '1');
+  // Paws.
+  ellipse(g, 12, 29, 2, 1, MID);
+  ellipse(g, 20, 29, 2, 1, MID);
+  setPixel(g, 16, 30, MID);
 
-  // Tail — continuous thick curve, sweeps up the right side of the body
-  if ((opts.tail ?? 'curled') === 'curled') {
-    polyline(g, [
-      [24, 24],
-      [26, 22],
-      [27, 19],
-      [27, 16],
-      [26, 14],
-    ], '1');
-  } else if (opts.tail === 'fluffy') {
-    ellipse(g, 26, 22, 3, 5, '1');
-    ellipse(g, 28, 19, 2, 3, '1');
-  } else if (opts.tail === 'long') {
-    polyline(g, [[24, 24], [26, 21], [27, 17], [27, 13]], '1');
-  }
-
-  // Mane drawn BEFORE finish so it participates in outline + highlight.
-  if (opts.mane) {
+  if (spec.mane) {
     drawMane(g);
   }
 
-  finish(g);
-  return gridToRows(g);
-}
+  applyPattern(g, spec.pattern ?? 'none', spec.seed ?? 1);
 
-// Sitting canine. Slightly different head shape, longer snout.
-export function generateDog(opts: AnimalOptions = {}): string[] {
-  const g = makeGrid();
-  const ears = opts.ears ?? 'perked';
-  const build = opts.build ?? 'normal';
+  // Face on top of any markings.
+  drawEyes(g, 16, { y: 12, dx: 3, slit: true });
+  setPixel(g, 16, 15, NOSE);
+  setPixel(g, 15, 16, MOUTH);
+  setPixel(g, 17, 16, MOUTH);
 
-  const bodyRx = build === 'stocky' ? 11 : 9;
-  const bodyRy = 8;
-  const bodyCx = 16;
-  const bodyCy = 22;
-  ellipse(g, bodyCx, bodyCy, bodyRx, bodyRy, '1');
-
-  const headRx = build === 'stocky' ? 9 : 7;
-  const headRy = build === 'stocky' ? 7 : 6;
-  ellipse(g, 16, 11, headRx, headRy, '1');
-
-  // Snout — slight protrusion at the bottom of the head
-  ellipse(g, 16, 15, 4, 3, '1');
-
-  // Ears
-  if (ears === 'perked') {
-    // Solid pointy ears, taller than cat ears
-    // Left
-    rect(g, 8, 3, 2, 1, '1');
-    rect(g, 8, 4, 3, 1, '1');
-    rect(g, 8, 5, 4, 1, '1');
-    rect(g, 8, 6, 4, 1, '1');
-    rect(g, 8, 7, 5, 1, '1');
-    rect(g, 9, 5, 1, 3, '2'); // inner shadow stripe
-    // Right
-    rect(g, 22, 3, 2, 1, '1');
-    rect(g, 21, 4, 3, 1, '1');
-    rect(g, 20, 5, 4, 1, '1');
-    rect(g, 20, 6, 4, 1, '1');
-    rect(g, 19, 7, 5, 1, '1');
-    rect(g, 22, 5, 1, 3, '2');
-  } else if (ears === 'floppy') {
-    // Drooping ears past the cheeks
-    ellipse(g, 7, 13, 2, 5, '2');
-    ellipse(g, 25, 13, 2, 5, '2');
-    ellipse(g, 7, 16, 2, 3, '1');
-    ellipse(g, 25, 16, 2, 3, '1');
-  }
-
-  // Eyes
-  ellipse(g, 13, 11, 1, 2, '4');
-  ellipse(g, 19, 11, 1, 2, '4');
-  setPixel(g, 13, 11, '5');
-  setPixel(g, 19, 11, '5');
-
-  // Nose (bigger than cat)
-  ellipse(g, 16, 16, 2, 1, '6');
-
-  // Mouth — small wedge
-  setPixel(g, 15, 18, '7');
-  setPixel(g, 16, 18, '7');
-  setPixel(g, 17, 18, '7');
-
-  // Front paws
-  ellipse(g, 12, 29, 2, 1, '1');
-  ellipse(g, 20, 29, 2, 1, '1');
-
-  // Tail — wag stub
-  if ((opts.tail ?? 'short') === 'short') {
-    ellipse(g, 26, 21, 2, 2, '1');
-  } else if (opts.tail === 'long') {
-    for (let i = 0; i < 8; i++) {
-      setPixel(g, 25 + Math.floor(i / 2), 22 - i, '1');
-    }
-  }
-
-  finish(g);
-
-  return gridToRows(g);
-}
-
-// Standing wolf — taller, more angular, longer snout.
-export function generateWolf(opts: AnimalOptions = {}): string[] {
-  const g = makeGrid();
-
-  // Body — longer horizontally
-  ellipse(g, 16, 21, 11, 6, '1');
-
-  // Head — angular
-  ellipse(g, 16, 11, 7, 5, '1');
-  // Snout extension
-  rect(g, 14, 14, 5, 4, '1');
-  ellipse(g, 16, 17, 3, 2, '1');
-
-  // Long pointed ears
-  triangle(g, 9, 9, 7, 2, 11, 7, '1');
-  triangle(g, 23, 9, 25, 2, 21, 7, '1');
-  triangle(g, 9, 8, 8, 4, 10, 7, '2');
-  triangle(g, 23, 8, 24, 4, 22, 7, '2');
-
-  // Eyes — narrow / mean
-  setPixel(g, 12, 11, '4');
-  setPixel(g, 13, 11, '4');
-  setPixel(g, 19, 11, '4');
-  setPixel(g, 20, 11, '4');
-  setPixel(g, 13, 11, '5');
-  setPixel(g, 19, 11, '5');
-
-  // Nose
-  setPixel(g, 16, 17, '6');
-  setPixel(g, 15, 17, '6');
-  setPixel(g, 17, 17, '6');
-
-  // Mouth — sharper
-  setPixel(g, 15, 19, '7');
-  setPixel(g, 16, 19, '7');
-  setPixel(g, 17, 19, '7');
-
-  // Four legs (standing)
-  rect(g, 9, 26, 2, 4, '1');
-  rect(g, 13, 26, 2, 4, '1');
-  rect(g, 18, 26, 2, 4, '1');
-  rect(g, 22, 26, 2, 4, '1');
-
-  // Bushy tail
-  for (let i = 0; i < 8; i++) {
-    setPixel(g, 27 + Math.floor(i / 4), 22 - i, '1');
-  }
-  ellipse(g, 28, 17, 2, 2, '1');
-
-  finish(g);
-
-  return gridToRows(g);
-}
-
-// Bird — small, perched.
-export function generateBird(opts: AnimalOptions = {}): string[] {
-  const g = makeGrid();
-
-  // Plump round body
-  ellipse(g, 16, 19, 8, 8, '1');
-
-  // Head — small circle on top of body, offset slightly forward
-  ellipse(g, 16, 9, 6, 5, '1');
-
-  // Beak — small triangle protruding right
-  triangle(g, 21, 9, 25, 10, 21, 11, '6');
-
-  // Eye — single forward-facing dot (sideways view)
-  ellipse(g, 18, 8, 1, 1, '4');
-  setPixel(g, 18, 8, '5');
-
-  // Wing — colored accent on body
-  ellipse(g, 13, 18, 4, 5, '8');
-
-  // Legs — two thin stick legs
-  rect(g, 14, 27, 1, 4, '6');
-  rect(g, 18, 27, 1, 4, '6');
-  // Feet
-  setPixel(g, 13, 30, '6');
-  setPixel(g, 14, 30, '6');
-  setPixel(g, 15, 30, '6');
-  setPixel(g, 17, 30, '6');
-  setPixel(g, 18, 30, '6');
-  setPixel(g, 19, 30, '6');
-
-  // Tail feathers — a small wedge extending back-left from the body
-  polyline(g, [[8, 20], [5, 22], [3, 23]], '1');
-  polyline(g, [[8, 22], [5, 24], [3, 25]], '1');
-
-  finish(g);
-
-  return gridToRows(g);
-}
-
-// Owl — bigger, fluffier, prominent eyes.
-export function generateOwl(): string[] {
-  const g = makeGrid();
-
-  // Round body
-  ellipse(g, 16, 19, 10, 9, '1');
-
-  // Head — slightly bigger than other birds
-  ellipse(g, 16, 9, 8, 7, '1');
-
-  // Ear tufts (great horned owl)
-  triangle(g, 10, 5, 8, 1, 12, 6, '1');
-  triangle(g, 22, 5, 24, 1, 20, 6, '1');
-
-  // Two BIG round eyes — owl signature
-  ellipse(g, 12, 9, 3, 3, '4');
-  ellipse(g, 20, 9, 3, 3, '4');
-  // Pupils
-  ellipse(g, 12, 9, 1, 1, '5');
-  ellipse(g, 20, 9, 1, 1, '5');
-
-  // Beak — small triangle between eyes
-  triangle(g, 16, 11, 14, 13, 18, 13, '6');
-
-  // Speckled chest pattern (accent color spots)
-  setPixel(g, 13, 17, '2');
-  setPixel(g, 16, 16, '2');
-  setPixel(g, 19, 17, '2');
-  setPixel(g, 14, 19, '2');
-  setPixel(g, 18, 19, '2');
-  setPixel(g, 15, 21, '2');
-  setPixel(g, 17, 21, '2');
-
-  // Wings — darker accent on the sides
-  ellipse(g, 8, 18, 3, 6, '8');
-  ellipse(g, 24, 18, 3, 6, '8');
-
-  // Legs
-  rect(g, 13, 27, 2, 3, '6');
-  rect(g, 17, 27, 2, 3, '6');
-  // Talons
-  setPixel(g, 12, 30, '6');
-  setPixel(g, 13, 30, '6');
-  setPixel(g, 14, 30, '6');
-  setPixel(g, 17, 30, '6');
-  setPixel(g, 18, 30, '6');
-  setPixel(g, 19, 30, '6');
-
-  finish(g);
-
-  return gridToRows(g);
-}
-
-// ── Shared helpers ─────────────────────────────────────────────────────
-
-// Outline pass: any body-silhouette pixel (palette 1 or 8 — body or accent
-// like mane / wing) whose 4-neighborhood contains transparency becomes the
-// outline color (palette 2). Produces a clean 1-pixel ring around the
-// whole silhouette — the single biggest "feels finished" trick.
-function drawOutline(g: Grid) {
-  const snap = g.map((r) => r.slice());
-  const isBody = (ch: string) => ch === '1' || ch === '8';
-  for (let y = 0; y < GRID; y++) {
-    for (let x = 0; x < GRID; x++) {
-      if (!isBody(snap[y][x])) continue;
-      const left = x > 0 ? snap[y][x - 1] : '.';
-      const right = x < GRID - 1 ? snap[y][x + 1] : '.';
-      const up = y > 0 ? snap[y - 1][x] : '.';
-      const down = y < GRID - 1 ? snap[y + 1][x] : '.';
-      if (left === '.' || right === '.' || up === '.' || down === '.') {
-        g[y][x] = '2';
-      }
-    }
-  }
-}
-
-// Highlight pass: the topmost remaining body pixel (palette 1) in each
-// column becomes highlight (palette 3). Suggests light coming from above
-// and gives the silhouette depth.
-function drawTopHighlight(g: Grid) {
-  for (let x = 0; x < GRID; x++) {
-    for (let y = 0; y < GRID; y++) {
-      if (g[y][x] === '1') {
-        g[y][x] = '3';
-        break;
-      }
-    }
-  }
-}
-
-// Standard finish pipeline: outline first, then highlight the topmost
-// interior pixel per column. Called at the end of every animal composer.
-function finish(g: Grid) {
   drawOutline(g);
-  drawTopHighlight(g);
+  return gridToRows(g);
+}
+
+function composeDog(spec: AnimalSpec): string[] {
+  const g = makeGrid();
+  const build = spec.build ?? 'normal';
+  const ears = spec.ears ?? 'floppy';
+  const bodyRx = build === 'stocky' ? 10 : 8;
+  const headRx = build === 'stocky' ? 8 : 7;
+
+  // Tail.
+  if (spec.tail === 'long') {
+    taperStroke(g, [[23, 24], [27, 21], [28, 15]], 2, 1, MID);
+  } else {
+    taperStroke(g, [[23, 24], [26, 21], [27, 17]], 2, 1, MID);
+  }
+
+  // Floppy ears: big lobes framing the head, drawn first so the head overlaps
+  // their tops and they read as hanging ears rather than side-shading.
+  if (ears === 'floppy') {
+    shadeEllipse(g, 8, 15, 4, 7);
+    shadeEllipse(g, 24, 15, 4, 7);
+  }
+
+  shadeEllipse(g, 16, 22, bodyRx, 8, { bellyLight: true });
+  shadeEllipse(g, 16, 11, headRx, 6);
+  // Muzzle bump.
+  shadeEllipse(g, 16, 16, 4, 3);
+
+  if (ears === 'perked') {
+    triangle(g, 9, 8, 10, 1, 14, 8, MID);
+    triangle(g, 23, 8, 22, 1, 18, 8, MID);
+    triangle(g, 11, 7, 11, 3, 13, 7, INNER);
+    triangle(g, 21, 7, 21, 3, 19, 7, INNER);
+  }
+
+  // Paws.
+  ellipse(g, 12, 29, 2, 1, MID);
+  ellipse(g, 20, 29, 2, 1, MID);
+  setPixel(g, 16, 30, MID);
+
+  applyPattern(g, spec.pattern ?? 'none', spec.seed ?? 1);
+
+  drawEyes(g, 16, { y: 11, dx: 3 });
+  // Snout: nose pad + short mouth.
+  setPixel(g, 15, 16, NOSE);
+  setPixel(g, 16, 16, NOSE);
+  setPixel(g, 17, 16, NOSE);
+  setPixel(g, 16, 17, MOUTH);
+  setPixel(g, 15, 18, MOUTH);
+  setPixel(g, 17, 18, MOUTH);
+
+  drawOutline(g);
+  return gridToRows(g);
+}
+
+function composeWolf(spec: AnimalSpec): string[] {
+  const g = makeGrid();
+
+  // Bushy tail sweeping up behind the haunch.
+  ellipse(g, 27, 16, 3, 5, MID);
+  taperStroke(g, [[23, 21], [27, 17]], 3, 2, MID);
+
+  // Four legs (standing), with a hint of a chest between the front pair.
+  for (const lx of [9, 13, 18, 22]) rect(g, lx, 24, 2, 6, MID);
+
+  // Slimmer, higher body + a real neck so the head sits clear of the back.
+  shadeEllipse(g, 16, 21, 9, 5);
+  rect(g, 13, 14, 6, 6, MID);
+  shadeEllipse(g, 16, 10, 6, 5);
+  // Tapered snout pushing down off the face.
+  shadeEllipse(g, 16, 14, 3, 2);
+
+  // Tall pointed ears.
+  triangle(g, 9, 8, 8, 1, 13, 7, MID);
+  triangle(g, 23, 8, 24, 1, 19, 7, MID);
+  triangle(g, 10, 7, 10, 3, 12, 7, INNER);
+  triangle(g, 22, 7, 22, 3, 20, 7, INNER);
+
+  applyPattern(g, spec.pattern ?? 'none', spec.seed ?? 1);
+
+  drawEyes(g, 16, { y: 10, dx: 3, slit: true });
+  setPixel(g, 16, 14, NOSE);
+  setPixel(g, 15, 14, NOSE);
+  setPixel(g, 17, 14, NOSE);
+  setPixel(g, 16, 15, MOUTH);
+
+  drawOutline(g);
+  return gridToRows(g);
+}
+
+function composeBird(spec: AnimalSpec): string[] {
+  const g = makeGrid();
+
+  // Tail feathers back-left.
+  taperStroke(g, [[11, 19], [5, 21], [2, 22]], 2, 1, MID);
+  taperStroke(g, [[11, 21], [5, 24], [2, 25]], 2, 1, MID);
+
+  shadeEllipse(g, 16, 19, 8, 8, { bellyLight: true });
+  shadeEllipse(g, 17, 9, 6, 5);
+
+  // Beak (right-facing).
+  triangle(g, 22, 8, 27, 10, 22, 12, NOSE);
+
+  // Folded wing.
+  ellipse(g, 14, 19, 4, 5, SHA);
+  for (let i = 0; i < 4; i++) setPixel(g, 12 + i, 22, OUT);
+
+  // Legs + feet.
+  rect(g, 14, 27, 1, 4, NOSE);
+  rect(g, 18, 27, 1, 4, NOSE);
+  for (const fx of [13, 14, 15, 17, 18, 19]) setPixel(g, fx, 31, NOSE);
+
+  applyPattern(g, spec.pattern ?? 'none', spec.seed ?? 1);
+
+  // Single forward eye.
+  ellipse(g, 19, 8, 1, 1, IRIS);
+  setPixel(g, 19, 8, PUP);
+  setPixel(g, 18, 7, SHINE);
+
+  drawOutline(g);
+  return gridToRows(g);
+}
+
+function composeOwl(spec: AnimalSpec): string[] {
+  const g = makeGrid();
+
+  shadeEllipse(g, 16, 19, 10, 9, { bellyLight: true });
+  shadeEllipse(g, 16, 10, 8, 7);
+
+  // Ear tufts.
+  triangle(g, 9, 5, 8, 0, 13, 6, MID);
+  triangle(g, 23, 5, 24, 0, 19, 6, MID);
+
+  // Wings.
+  ellipse(g, 7, 18, 3, 6, SHA);
+  ellipse(g, 25, 18, 3, 6, SHA);
+
+  // Beak.
+  triangle(g, 16, 11, 14, 14, 18, 14, NOSE);
+
+  // Legs + talons.
+  rect(g, 13, 27, 2, 3, NOSE);
+  rect(g, 17, 27, 2, 3, NOSE);
+  for (const fx of [12, 13, 14, 17, 18, 19]) setPixel(g, fx, 30, NOSE);
+
+  applyPattern(g, spec.pattern ?? 'speckle', spec.seed ?? 1);
+
+  // Two big eyes.
+  drawEyes(g, 16, { y: 10, dx: 4, big: true });
+
+  drawOutline(g);
+  return gridToRows(g);
 }
 
 function drawMane(g: Grid) {
-  // Thick fluffy ring around the head — drawn as the AREA between two
-  // concentric ellipses, then trimmed back so it only covers space that's
-  // currently transparent or already mane.
   const cx = 16;
-  const cy = 12;
-  const outerRx = 11;
-  const outerRy = 10;
+  const cy = 13;
+  const outerRx = 12;
+  const outerRy = 11;
   const innerRx = 7;
   const innerRy = 6;
+  const rnd = mulberry(99);
   for (let y = Math.max(0, cy - outerRy); y <= Math.min(GRID - 1, cy + outerRy); y++) {
     for (let x = Math.max(0, cx - outerRx); x <= Math.min(GRID - 1, cx + outerRx); x++) {
       const odx = (x - cx) / outerRx;
       const ody = (y - cy) / outerRy;
       const idx = (x - cx) / innerRx;
       const idy = (y - cy) / innerRy;
-      const inOuter = odx * odx + ody * ody <= 1;
-      const inInner = idx * idx + idy * idy <= 1;
-      if (inOuter && !inInner) {
-        // Only place mane where it wouldn't overwrite head body or features
+      if (odx * odx + ody * ody <= 1 && idx * idx + idy * idy > 1) {
         const cur = g[y][x];
-        if (cur === '.' || cur === '1') g[y][x] = '8';
+        if (cur === T || cur === MID) {
+          // Ragged edge: drop some outer pixels for a fur silhouette.
+          const edge = odx * odx + ody * ody;
+          if (edge > 0.82 && rnd() > 0.55) continue;
+          g[y][x] = PAT;
+        }
       }
     }
   }
-  // Fluff tufts at the top
-  setPixel(g, 11, 1, '8');
-  setPixel(g, 16, 0, '8');
-  setPixel(g, 21, 1, '8');
 }

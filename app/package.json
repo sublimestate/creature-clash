@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
+    "sprites:preview": "tsx scripts/renderSprites.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "@types/node": "^25.6.0",
     "@types/react": "~19.1.0",
     "react-test-renderer": "19.1.0",
+    "tsx": "^4.22.4",
     "typescript": "~5.9.2",
     "vitest": "^4.1.5"
   },
