@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { playSfx } from '../../src/audio';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
 import { getBoss } from '../../src/data/bosses';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
@@ -196,7 +197,10 @@ export default function PreviewScreen() {
         </View>
 
         <Pressable
-          onPress={() => router.replace(`/battle/${stage.id}`)}
+          onPress={() => {
+            playSfx('fight');
+            router.replace(`/battle/${stage.id}`);
+          }}
           style={({ pressed }) => [
             styles.fightButton,
             { opacity: pressed ? 0.85 : 1 },

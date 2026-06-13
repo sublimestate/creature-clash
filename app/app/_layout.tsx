@@ -3,8 +3,10 @@ import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
+import { initAudio, playBgm, unlockAudio } from '../src/audio';
 import { COLORS } from '../src/theme';
 
 export {
@@ -20,6 +22,21 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync().catch(() => {});
+  }, []);
+
+  // Theme music starts on the first user gesture — browser autoplay policy
+  // keeps the AudioContext suspended until then, so every gesture re-syncs.
+  useEffect(() => {
+    void initAudio();
+    playBgm('theme');
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const unlock = () => unlockAudio();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
   }, []);
 
   const navTheme = {

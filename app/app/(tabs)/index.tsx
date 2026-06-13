@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CreatureSprite } from '../../src/components/common/CreatureSprite';
 import { CurrencyHeader } from '../../src/components/common/CurrencyHeader';
+import { MuteButton } from '../../src/components/common/MuteButton';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
 import { STAGES } from '../../src/data/stages';
 import { usePlayerStore } from '../../src/stores/playerStore';
@@ -44,7 +45,10 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>Welcome,</Text>
           <Text style={styles.name}>{displayName}</Text>
         </View>
-        <CurrencyHeader />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <MuteButton />
+          <CurrencyHeader />
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>

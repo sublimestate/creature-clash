@@ -86,6 +86,11 @@ app/
 │   │   ├── recruitment.ts        # post-victory recruit roll (rarity-tiered)
 │   │   └── __tests__/            # engine.test.ts (assertions) +
 │   │                             #   balance.test.ts (diagnostic only)
+│   ├── audio/                    # runtime Web Audio synth (no binary assets)
+│   │   ├── synth.ts              # AudioContext, tone/noise primitives, mute state
+│   │   ├── sfx.ts                # named SFX recipes (hit/crit/heal/victory/...)
+│   │   ├── bgm.ts                # chiptune step sequencer (theme + battle tracks)
+│   │   └── index.ts              # public API: playSfx/playBgm/initAudio/unlockAudio
 │   ├── data/
 │   │   ├── creatures.ts          # 24 pets (cats/dogs/birds) with stats
 │   │   ├── abilities.ts          # ~24 role-themed abilities
@@ -103,7 +108,7 @@ app/
 │   │   ├── battle/               # BattleUnit, HealthBar, DamageNumber
 │   │   ├── creatures/            # CreatureCard, FieldJournal (encyclopedia)
 │   │   └── common/               # CreatureSprite, PixelSprite, CurrencyHeader,
-│   │                             #   RarityBadge
+│   │                             #   RarityBadge, MuteButton
 │   ├── types/index.ts            # shared types (CreatureType, BattleEvent, etc.)
 │   └── theme.ts                  # COLORS + RARITY_COLORS
 ├── e2e/                          # Playwright browser tests + save-seeding helper
@@ -161,6 +166,29 @@ creature picks a template + a 9-color palette. Templates declare their own
 helper validates row dimensions at module load; mistakes throw immediately.
 `<PixelSprite>` reads the per-template grid size and renders cells as Views.
 
+### Audio
+
+`src/audio/` synthesizes everything at runtime with the Web Audio API — the
+audio analog of the procedural sprites; there are no sound files. SFX are
+per-event recipes (`sfxForEvent` in the battle screen maps BattleEvent kinds
+to sounds); BGM is a step sequencer with two looping tracks (`theme` for
+home/campaign, `battle` in-fight) plus victory/defeat jingles as SFX.
+
+Rules of the road:
+- **Web-only by design.** Every entry point no-ops on native and in
+  non-AudioContext browsers; call audio functions unconditionally, never
+  guard at call sites. A future native pass swaps internals for expo-audio
+  behind the same `src/audio` API.
+- Browser autoplay policy keeps the context suspended until a user gesture;
+  the root layout's pointerdown/keydown listener calls `unlockAudio()`,
+  which resumes and starts any BGM requested while locked. Don't expect
+  sound before the first click.
+- Mute is persisted under its own AsyncStorage key
+  (`creature-clash-audio`), deliberately NOT in the player save schema —
+  no store version bump needed.
+- `Math.random()` in `src/audio/` is fine (noise buffer); the determinism
+  rule applies to `src/engine/` only.
+
 ### Save / persistence
 
 Zustand persist key `creature-clash-player`, version `2`. Bump version + extend
@@ -212,6 +240,8 @@ in `completedStages`.
   Field Journal encyclopedia with met-tracking + filter chips
 - **Sprites**: procedural 32×32 full-body sprites for every creature
   with outline + top-highlight finish pipeline
+- **Audio**: procedurally synthesized SFX (15 named sounds) + chiptune BGM
+  (theme/battle loops), mute toggle on home + battle headers (web only)
 - **Web**: clean static export; tested only on web
 - **Balance simulator**: `src/engine/__tests__/balance.test.ts` is
   informational, never fails. Simulates each stage 100× across player
@@ -219,7 +249,8 @@ in `completedStages`.
 
 ## Not yet done
 
-- Audio (SFX + BGM via `expo-av`) — biggest remaining feel gap
+- Native audio — the Web Audio synth no-ops on iOS/Android; needs an
+  expo-audio (or similar) backend behind the same `src/audio` API
 - Supabase auth + cloud save
 - Gacha system (intentionally deferred per user)
 - Higher-fidelity hand-drawn pixel art (the procedural sprites are a

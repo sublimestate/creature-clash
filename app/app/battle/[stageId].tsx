@@ -7,10 +7,12 @@ import {
   Text,
   View,
 } from 'react-native';
+import { playBgm, playSfx, SfxName, stopBgm } from '../../src/audio';
 import {
   BattleUnit,
   UnitDisplayState,
 } from '../../src/components/battle/BattleUnit';
+import { MuteButton } from '../../src/components/common/MuteButton';
 import { getBoss } from '../../src/data/bosses';
 import { CREATURES_BY_ID } from '../../src/data/creatures';
 import { STAGES, STAGES_BY_ID } from '../../src/data/stages';
@@ -99,6 +101,12 @@ export default function BattleScreen() {
     setUnits(initialUnits);
   }, [initialUnits]);
 
+  // Battle music for the duration of the screen; back to the theme on exit.
+  useEffect(() => {
+    playBgm('battle');
+    return () => playBgm('theme');
+  }, []);
+
   // Drive playback
   useEffect(() => {
     if (!battleData) return;
@@ -121,6 +129,9 @@ export default function BattleScreen() {
   function applyEvent(event: BattleEvent) {
     tickRef.current += 1;
     const tick = tickRef.current;
+
+    const sfx = sfxForEvent(event);
+    if (sfx) playSfx(sfx);
 
     setUnits((prev) =>
       prev.map((u) => {
@@ -195,11 +206,15 @@ export default function BattleScreen() {
     if (!done || !battleData || rewarded) return;
     if (!stage) return;
     setRewarded(true);
+    stopBgm();
+    playSfx(battleData.result.winner === 'player' ? 'victory' : 'defeat');
     if (battleData.result.winner === 'player') {
       addGold(stage.goldReward);
       const playerInstanceIds = battleData.playerSlots.map((s) => s.owned.instanceId);
       const leveled = awardXp(playerInstanceIds, stage.xpReward);
       setLevelUps(leveled);
+      // Stagger the reward stings so they read after the victory jingle.
+      if (leveled.length > 0) setTimeout(() => playSfx('levelup'), 700);
 
       const survivors = battleData.result.playerSurvivors;
       const stars = survivors >= 4 ? 3 : survivors >= 2 ? 2 : 1;
@@ -223,6 +238,7 @@ export default function BattleScreen() {
         const recruitLevel = Math.max(1, Math.floor(stage.enemyLevel / 2));
         const added = addCreature(recruitRoll.creatureId, recruitLevel);
         setRecruit(added);
+        setTimeout(() => playSfx('recruit'), 1100);
       }
     }
   }, [
@@ -276,12 +292,15 @@ export default function BattleScreen() {
             Stage {stage.chapter}-{stage.index}
           </Text>
         </View>
-        <Pressable
-          onPress={() => setSpeedIndex((i) => (i + 1) % SPEEDS.length)}
-          style={styles.headerBtn}
-        >
-          <Text style={styles.headerBtnText}>{speed.label}</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+          <MuteButton />
+          <Pressable
+            onPress={() => setSpeedIndex((i) => (i + 1) % SPEEDS.length)}
+            style={styles.headerBtn}
+          >
+            <Text style={styles.headerBtnText}>{speed.label}</Text>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.arena}>
@@ -362,6 +381,7 @@ export default function BattleScreen() {
           <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
             <Pressable
               onPress={() => {
+                playSfx('tap');
                 // After beating the final stage for the first time, route
                 // to the outro instead of back to the campaign list.
                 const finalId = STAGES[STAGES.length - 1].id;
@@ -381,7 +401,10 @@ export default function BattleScreen() {
               <Text style={styles.buttonText}>Continue</Text>
             </Pressable>
             <Pressable
-              onPress={() => router.replace(`/preview/${stage.id}`)}
+              onPress={() => {
+                playSfx('tap');
+                router.replace(`/preview/${stage.id}`);
+              }}
               style={[styles.button, { backgroundColor: COLORS.panel }]}
             >
               <Text style={[styles.buttonText, { color: COLORS.text }]}>Retry</Text>
@@ -391,6 +414,27 @@ export default function BattleScreen() {
       )}
     </View>
   );
+}
+
+function sfxForEvent(event: BattleEvent): SfxName | null {
+  switch (event.kind) {
+    case 'attack':
+      if (event.dodged) return 'miss';
+      if (event.isCrit) return 'crit';
+      if (event.effectiveness === 'super') return 'super';
+      if (event.effectiveness === 'weak') return 'weak';
+      return 'hit';
+    case 'heal':
+      return 'heal';
+    case 'buff':
+      return 'buff';
+    case 'status_apply':
+      return 'status';
+    case 'faint':
+      return 'faint';
+    default:
+      return null;
+  }
 }
 
 function Side({ units, side }: { units: UnitDisplayState[]; side: 'player' | 'enemy' }) {
