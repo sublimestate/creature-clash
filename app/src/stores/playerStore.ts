@@ -88,7 +88,18 @@ export const usePlayerStore = create<PlayerState>()(
           xp: 0,
           acquiredAt: Date.now(),
         };
-        set((s) => ({ ownedCreatures: [...s.ownedCreatures, owned] }));
+        set((s) => {
+          const nextOwned = [...s.ownedCreatures, owned];
+          let nextTeam = s.team;
+          
+          const emptyIndex = s.team.findIndex((t) => t.instanceId === null);
+          if (emptyIndex !== -1) {
+            nextTeam = [...s.team];
+            nextTeam[emptyIndex] = { ...nextTeam[emptyIndex], instanceId: owned.instanceId };
+          }
+          
+          return { ownedCreatures: nextOwned, team: nextTeam };
+        });
         return owned;
       },
 
