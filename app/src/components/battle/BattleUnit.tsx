@@ -42,6 +42,7 @@ export interface UnitDisplayState {
   };
   flash?: { type: CreatureType; tick: number };
   active?: boolean;
+  hitEffect?: { icon: string; tick: number };
 }
 
 interface Props {
@@ -62,6 +63,8 @@ export function BattleUnit({ unit }: Props) {
   const tx = useSharedValue(0);
   const sx = useSharedValue(0);
   const flashOpacity = useSharedValue(0);
+  const hitEffectScale = useSharedValue(0.5);
+  const hitEffectOpacity = useSharedValue(0);
 
   React.useEffect(() => {
     if (unit.attackTick === undefined) return;
@@ -91,12 +94,32 @@ export function BattleUnit({ unit }: Props) {
     );
   }, [unit.flash?.tick, flashOpacity]);
 
+  React.useEffect(() => {
+    if (!unit.hitEffect) return;
+    
+    hitEffectScale.value = withSequence(
+      withTiming(0.5, { duration: 0 }),
+      withTiming(1.5, { duration: 150 })
+    );
+    
+    hitEffectOpacity.value = withSequence(
+      withTiming(1, { duration: 0 }),
+      withTiming(1, { duration: 50 }),
+      withTiming(0, { duration: 250 })
+    );
+  }, [unit.hitEffect?.tick, hitEffectScale, hitEffectOpacity]);
+
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: tx.value + sx.value }],
   }));
 
   const flashStyle = useAnimatedStyle(() => ({ opacity: flashOpacity.value }));
   const flashColor = unit.flash ? TYPE_COLORS[unit.flash.type] : 'transparent';
+  
+  const hitEffectStyle = useAnimatedStyle(() => ({
+    opacity: hitEffectOpacity.value,
+    transform: [{ scale: hitEffectScale.value }],
+  }));
 
   const specialAbility = def.abilities[1];
   const cdMax = specialAbility ? ABILITIES[specialAbility]?.cooldown ?? 0 : 0;
@@ -136,6 +159,11 @@ export function BattleUnit({ unit }: Props) {
             flashStyle,
           ]}
         />
+        {unit.hitEffect && (
+          <Animated.View style={[styles.hitEffectOverlay, hitEffectStyle, { pointerEvents: 'none' }]}>
+            <Text style={styles.hitEffectText}>{unit.hitEffect.icon}</Text>
+          </Animated.View>
+        )}
         {unit.popup && (
           <View
             key={unit.popup.tick}
@@ -209,6 +237,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  hitEffectOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  hitEffectText: {
+    fontSize: 28,
   },
   statusRow: { flexDirection: 'row', gap: 2, height: 14 },
   statusIcon: { fontSize: 11, lineHeight: 14 },

@@ -25,6 +25,33 @@ import { OwnedCreature } from '../../src/types';
 import { COLORS } from '../../src/theme';
 import { BattleEvent } from '../../src/types';
 
+const ABILITY_ICONS: Record<string, string> = {
+  scratch: '///',
+  bite: '🦷',
+  nip: '🦷',
+  tackle: '💥',
+  swat: '🐾',
+  bark: '🔊',
+  pounce: '🐾',
+  maul: '💥',
+  fang_strike: '🦷',
+  dash: '💨',
+  zoomies: '💨',
+  pursue: '💨',
+  brace: '🛡️',
+  body_slam: '💥',
+  endure: '🛡️',
+  trick: '✨',
+  feint: '✨',
+  outsmart: '💡',
+  pack_howl: '🔊',
+  rally: '❤️',
+  group_pounce: '🐾',
+  frenzy: '💢',
+  snarl: '🔊',
+  feral_lunge: '💥',
+};
+
 const SPEEDS: Array<{ label: string; ms: number }> = [
   { label: '1×', ms: 800 },
   { label: '2×', ms: 400 },
@@ -179,6 +206,9 @@ export default function BattleScreen() {
                 };
                 if (event.abilityType) {
                   next.flash = { type: event.abilityType, tick };
+                }
+                if (event.abilityId) {
+                  next.hitEffect = { icon: ABILITY_ICONS[event.abilityId] || '💥', tick };
                 }
               }
             } else if (event.kind === 'heal') {
