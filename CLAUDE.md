@@ -3,8 +3,6 @@
 Auto-battler mobile game built with Expo Router + TypeScript. Cats vs dogs in
 the neighborhood; later chapters will introduce other species.
 
-Repo: https://github.com/sublimestate/creature-clash (private)
-
 ## Stack
 
 - **Framework**: React Native + Expo SDK 54, Expo Router (file-based routes),
@@ -279,7 +277,6 @@ in `completedStages`.
 
 - **No comments that re-state code.** Only when *why* is non-obvious.
 - **No emojis** in source files unless explicitly requested.
-- **Don't push to GitHub** without explicit user permission. Repo is private.
 - Tab bar headers are hidden — each screen renders its own header with a
   custom title and `CurrencyHeader`. Don't re-enable the default Tabs header.
 - Keep `<CreatureSprite>` API stable: `creatureId`, `type`, `size`, `fainted`,
